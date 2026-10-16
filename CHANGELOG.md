@@ -1,5 +1,19 @@
 # Changes
 
+## 0.3.1
+
+2026-10-17. Simon's corrections of the config, the setup and the words.
+
+- The table of `amd config` shows the start files that a session in each repository gets, and their tokens: `4` for its own files, `4 from group` or `4 from also` when they come from the group or from `start.also`, and `2 + 3 from group` for both. A repository whose sessions get nothing shows `0`, and a sentence under the table says that a session there gets nothing at the start.
+- The table sorts by the name of the group, with the repositories without a group last, and by name inside a group. A new group on a row moves the row to its group at once.
+- The setup has the station "The command amd" before "You". "Put amd on my PATH now" makes `~/.local/bin` when it is missing and the link `~/.local/bin/amd` to `bin/amd` of the plugin, then says whether `~/.local/bin` is on the PATH and gives the line for the start file of fish, zsh or bash. "Not now" gives the command to run later. On Windows it gives the folder and changes nothing. The README gives the link for an install from GitHub and from a folder, and the full path of `amd`.
+- `r` on a row of the table, after one question, and `amd config --remove <path>` remove a repository from the list in `projects.toml`. No file of the repository changes. The sentence after the removal says so, and that `amd init`, `amd config` or the next session start there puts it back on the list.
+- A person reads "start files as text", never "inject": the column of the table, the row "Give the start files as text when they fit in 10,000 characters" with yes or no, the README and the comment beside `start.inject` in `atlasmd.toml`. The key keeps its name. The row of `agents.inject` reads "a subagent gets".
+- The screen of `amd config` has the station About first: what atlasmd does in the three sentences of the welcome of the setup, how to set up a repository in three steps, every command with one line, the seven skills, and the three ways to turn atlasmd off. The last station of the setup names it.
+- The setup prints each station under the one before, as a terminal does: the route stays at the top, a station that is done shows its answer on one line in the dim color, and the current station shows in full. The stack scrolls when it passes the bottom. Enter picks an answer only when it is on the screen.
+- The setup, the screen of `amd config` and the README say "repository" where they meant the folder with `atlasmd.toml`.
+- `amd check`, `amd map`, `amd area` and `amd meter` in a folder without `atlasmd.toml` above it print one sentence and exit with code 1: "Run this in a repository that has atlasmd.toml, in its root or in a folder under it. amd init sets one up." `amd meter --list` there prints the sessions of every repository.
+
 ## 0.3.0
 
 2026-10-16.

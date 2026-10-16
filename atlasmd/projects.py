@@ -2,7 +2,8 @@
 
 amd init writes the entry of its repository. The hook writes or refreshes the entry at every session
 start in a repository with atlasmd.toml, and amd config writes the entry of the repository where it
-runs. An entry whose folder is gone is dropped at the next write.
+runs. amd config --remove and r on the screen of amd config remove an entry. An entry whose folder is gone
+is dropped at the next write.
 """
 from __future__ import annotations
 
@@ -68,6 +69,22 @@ def touch(root, group: str, started: bool = False) -> None:
         entries.append({"path": str(root), "name": root.name, "group": group or "", "seen": seen})
         entries.sort(key=lambda e: (e["name"].lower(), e["path"]))
         _write(entries)
+
+
+def remove(root) -> bool:
+    """Remove the entry of one repository from the list, and drop the entries whose folders are gone.
+    Nothing in the repository changes. True when the entry was on the list."""
+    own = config.norm(os.path.abspath(os.fspath(root)))
+    target = path()
+    if not target.is_file():
+        return False
+    with ledger._lock(target):
+        entries = load()
+        kept = [e for e in entries if config.norm(e["path"]) != own and os.path.isdir(e["path"])]
+        found = any(config.norm(e["path"]) == own for e in entries)
+        if found:
+            _write(kept)
+    return found
 
 
 def others(cfg: config.Config) -> list[config.Config]:

@@ -37,8 +37,8 @@ def fit(text, width):
 
 
 def wrap(markup, width):
-    """[(style, line)] for a text with blank lines between paragraphs, '## ' headings and
-    '- ' items. Styles: heading, item, plain."""
+    """[(style, line)] for a text with blank lines between paragraphs, '## ' headings, '- ' items and
+    commands, which start with four spaces and never wrap. Styles: heading, item, command, plain."""
     out = []
     width = max(12, width)
     for para in markup.split("\n"):
@@ -46,7 +46,9 @@ def wrap(markup, width):
             if out and out[-1][1]:
                 out.append(("plain", ""))
             continue
-        if para.startswith("## "):
+        if para.startswith("    "):
+            out.append(("command", para.strip()))
+        elif para.startswith("## "):
             out.append(("heading", para[3:].strip()))
         elif para.startswith("- "):
             lines = textwrap.wrap(para[2:], width=width - 2, break_on_hyphens=False) or [""]

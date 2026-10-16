@@ -1,37 +1,39 @@
 """amd setup: the guided screen. Run it once after the install. It is safe to run again.
 
-Five steps, drawn as stations on a route. Up and down move between the answers, Enter
-picks one, the left arrow goes back a step, q quits. Nothing is written before the last
-step, except the files of amd init when the person runs it on the step This project.
+Six stations on a route. The route stays at the top. Under it the screen prints each station under the one
+before, as a terminal does: a station that is done in the dim color with its answer on one line, the
+current station in full with its answers. Up and down move between the answers, Enter picks one, the left
+arrow goes back a station, q quits. Nothing is written before the last station, except two things that
+the person picks: the link ~/.local/bin/amd on the station The command amd, and the files of amd init on
+the station This repository.
 """
 import contextlib
 import io
 import os
+import shlex
+import shutil
 from pathlib import Path
 
 from atlasmd import cli, config, start, tui
 
-STEPS = ["Welcome", "How it works", "You", "This project", "Done"]
+STEPS = ["Welcome", "How it works", "The command amd", "You", "This repository", "Done"]
 HELP = [("↑↓", "move"), ("enter", "pick"), ("←", "back"), ("q", "quit")]
 
 WELCOME = (
     "atlasmd is a hook inside Claude Code. It runs at the start of a session, before every edit, "
     "and after every compaction.\n\n"
     "## At the start of a session\n"
-    "It gives Claude the Markdown files in docs/start/ of your project, and nothing else. Those files "
-    "say what the project is, what is open, and how to work here. So a new session knows the project "
-    "without reading the whole repository, and the start costs a few thousand tokens instead of "
-    "hundreds of thousands.\n\n"
+    f"{cli.WHAT[0]} Those files say what the repository is, what is open, and how to work here. So a new session "
+    "knows the repository without reading all of it, and the start costs a few thousand tokens instead "
+    "of hundreds of thousands.\n\n"
     "## Before an edit\n"
-    "When the file is in a folder that atlasmd.toml lists, it refuses the edit until Claude has read "
-    "the files listed for that folder, for example the folder's README. The README says how that part "
-    "works and why. For example: the README of api/ says that every time is stored as UTC. An agent "
-    "that did not read it writes local time, and the bug is in the data for weeks.\n\n"
+    f"{cli.WHAT[1]} For example, the README of a folder says how that part works and why. The README of api/ "
+    "says that every time is stored as UTC. An agent that did not read it writes local time, and the bug is in "
+    "the data for weeks.\n\n"
     "## After a compaction\n"
-    "A compaction removes the files Claude read from its context. So atlasmd makes Claude read the "
-    "listed files again before its next edit, and it writes the date, the project folder and the size "
-    "of the summary to compacts.log, so you can see what each compaction costs.\n\n"
-    "This setup has five steps. Every answer can be changed later with amd config or amd set."
+    f"A compaction removes the files that Claude read from its context. {cli.WHAT[2]} So you can see what each "
+    "compaction costs.\n\n"
+    f"This setup has {len(STEPS)} steps. You can change your settings later with amd config or amd set."
 )
 HOW = (
     "## At the start of a session\n"
@@ -47,12 +49,12 @@ HOW = (
     "## After a compaction\n"
     "- The hook keeps the list of files each session read, in ~/.claude/plugins/data/amd/ledgers/.\n"
     "- A compaction empties that list, so the next edit in a listed folder reads the files again.\n"
-    "- One line goes to compacts.log: date and time, project folder, manual or automatic, and the "
+    "- One line goes to compacts.log: date and time, repository folder, manual or automatic, and the "
     "size of the summary."
 )
 YOU = (
-    "Two settings that apply to every project on this computer.\n\n"
-    "1. A project without atlasmd.toml. At the start of a session there, should Claude say once: "
+    "Two settings that apply to every repository on this computer.\n\n"
+    "1. A repository without atlasmd.toml. At the start of a session there, should Claude say once: "
     "run /amd:init to set up atlasmd here? Yes or no.\n\n"
     "2. Characters per token. atlasmd shows sizes in tokens, and it counts one token for every "
     "2.5 characters. That fits English text and code. A larger number gives smaller sizes.\n\n"
@@ -66,6 +68,84 @@ def short(path):
     return "~" + text[len(home):] if text.startswith(home + os.sep) or text == home else text
 
 
+# ---------------------------------------------------------------- the command amd on the PATH
+def plugin_folder():
+    """The folder of this plugin: the folder above atlasmd/, with every link resolved."""
+    return Path(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+
+def amd_path():
+    """bin/amd of this plugin, or bin/amd.cmd on Windows."""
+    return plugin_folder() / "bin" / ("amd.cmd" if os.name == "nt" else "amd")
+
+
+def link_line(home=None):
+    """The one command that links ~/.local/bin/amd to bin/amd of this plugin, with mkdir when the folder is missing."""
+    line = f"ln -s {shlex.quote(str(amd_path()))} ~/.local/bin/amd"
+    folder = Path(home or Path.home()) / ".local" / "bin"
+    return line if folder.is_dir() else "mkdir -p ~/.local/bin && " + line
+
+
+def on_path(folder, path_value=None):
+    """True when folder is one of the folders in PATH."""
+    value = os.environ.get("PATH", "") if path_value is None else path_value
+    target = os.path.normcase(os.path.realpath(folder))
+    return any(os.path.normcase(os.path.realpath(os.path.expanduser(p))) == target
+               for p in value.split(os.pathsep) if p)
+
+
+def start_file_line(shell=None):
+    """(the start file of the shell in $SHELL, the line there that puts ~/.local/bin on PATH)."""
+    name = os.path.basename(os.environ.get("SHELL", "") if shell is None else shell)
+    if name == "fish":
+        return "~/.config/fish/config.fish", "fish_add_path ~/.local/bin"
+    if name == "zsh":
+        return "~/.zshrc", 'export PATH="$HOME/.local/bin:$PATH"'
+    if name == "bash":
+        return "~/.bashrc", 'export PATH="$HOME/.local/bin:$PATH"'
+    return "the start file of your shell", 'export PATH="$HOME/.local/bin:$PATH"'
+
+
+def path_lines(home=None, path_value=None, shell=None):
+    """Whether ~/.local/bin is on the PATH of this shell, and when it is not, the line for the start file."""
+    folder = Path(home or Path.home()) / ".local" / "bin"
+    if on_path(folder, path_value):
+        return ["~/.local/bin is on the PATH of this shell, so amd works in this terminal."]
+    file, line = start_file_line(shell)
+    return [f"~/.local/bin is not on the PATH of this shell. Add this line to {file}, then open a new terminal:",
+            "", "    " + line]
+
+
+def link_amd(home=None, path_value=None, shell=None):
+    """Put amd on the PATH: make ~/.local/bin when it is missing, and link ~/.local/bin/amd to bin/amd of this
+    plugin. Nothing else in the home folder changes, and an existing ~/.local/bin/amd stays.
+    Returns (the answer on one line, the lines to show)."""
+    folder = Path(home or Path.home()) / ".local" / "bin"
+    link, target = folder / "amd", amd_path()
+    if os.path.lexists(link):
+        if os.path.realpath(link) == os.path.realpath(target):
+            return ("~/.local/bin/amd was there already",
+                    [f"~/.local/bin/amd points at {target} already. The setup changed nothing.", ""]
+                    + path_lines(home, path_value, shell))
+        what = f"a link to {os.readlink(link)}" if link.is_symlink() else "a file"
+        return ("~/.local/bin/amd exists, nothing changed",
+                [f"~/.local/bin/amd exists, and it is {what}. The setup changed nothing. Remove it and pick this "
+                 "answer again, or keep it."])
+    ran = []
+    try:
+        if not folder.is_dir():
+            folder.mkdir(parents=True)
+            ran.append("mkdir -p ~/.local/bin")
+        os.symlink(target, link)
+        ran.append(f"ln -s {shlex.quote(str(target))} ~/.local/bin/amd")
+    except OSError as exc:
+        return ("the link failed",
+                [f"The setup could not make the link: {exc.strerror or exc}. Run this command yourself:", "",
+                 "    " + link_line(home)])
+    return (f"~/.local/bin/amd links to {short(target)}",
+            ["The setup ran:", ""] + ["    " + command for command in ran] + [""] + path_lines(home, path_value, shell))
+
+
 class Setup(tui.Page):
     title = "setup"
 
@@ -76,10 +156,14 @@ class Setup(tui.Page):
         self.cursor = 0
         self.scroll = 0
         self.follow = False
+        self.place = True
+        self.answers = {}
         self.offer = bool(cli.personal_value("offer_setup"))
         self.chars = float(cli.personal_value("token_chars"))
         self.init_output = None
+        self.link_result = None  # (the answer on one line, the lines to show) after a pick on The command amd
         self.saved_to = None
+        self.shown = (0, 0)  # the row of the first answer and the rows on the screen, at the last draw
 
     # ------------------------------------------------------------ content
     def project(self):
@@ -92,25 +176,27 @@ class Setup(tui.Page):
             return None, str(exc)
 
     def content(self):
-        """(markup, [(label, value, hint, action)]) of the current step."""
+        """(markup, [(label, value, hint, action)]) of the current station."""
         if self.step == 0:
             return WELCOME, [("Start", "", "atlasmd saves your answers at the last step", self.next),
                              ("Quit", "", "", self.quit)]
         if self.step == 1:
             return HOW, [("Continue", "", "", self.next)]
         if self.step == 2:
+            return self.command_step()
+        if self.step == 3:
             return YOU, [
                 ("Suggest /amd:init", "yes" if self.offer else "no",
-                 "in a project without atlasmd.toml", self.toggle_offer),
+                 "in a repository without atlasmd.toml", self.toggle_offer),
                 ("Characters per token, for the sizes", f"{self.chars:g}", "Enter types a number", self.type_chars),
                 ("Continue", "", "", self.next),
             ]
-        if self.step == 3:
+        if self.step == 4:
             return self.project_step()
         lines = [
             "## Saved",
             f"- Your settings: {short(self.saved_to)}" if self.saved_to else "- Your settings: not saved",
-            f"- Suggest /amd:init in a project without atlasmd.toml: {'yes' if self.offer else 'no'}",
+            f"- Suggest /amd:init in a repository without atlasmd.toml: {'yes' if self.offer else 'no'}",
             f"- Characters per token: {self.chars:g}",
             "",
             "## Three commands to remember",
@@ -120,9 +206,31 @@ class Setup(tui.Page):
             "exist, and file names that break the rule of their folder.",
             "- amd why, in a terminal, shows the last edit that the hook refused, and the files that Claude had not read.",
             "",
-            "You can run amd setup again at any time. amd config shows and changes atlasmd.toml of a project.",
+            "amd config shows every command, the skills and how to set up a repository on its first station, About. "
+            "You can run amd setup again at any time.",
         ]
         return "\n".join(lines), [("Finish", "", "", self.quit)]
+
+    def command_step(self):
+        target = amd_path()
+        why = ("In a Claude Code session, the skills of atlasmd run amd by the full path of the plugin, so Claude "
+               "needs nothing more. This step makes amd work in your own terminal too.")
+        if os.name == "nt":
+            text = (f"{why} The setup does not change PATH on Windows. Add this folder to your PATH once. "
+                    f"The launcher in it is amd.cmd.\n\n    {target.parent}\n\n"
+                    f"Without it, amd works by its full path: {target}")
+            return text, [("Continue", "", "", self.next)]
+        if self.link_result is not None:
+            return "\n".join(self.link_result[1]), [("Continue", "", "", self.next)]
+        found = shutil.which("amd")
+        if found and os.path.realpath(found) == os.path.realpath(target):
+            text = f"amd works in this terminal already: {short(found)} points at {target}."
+            return text, [("Continue", "", "", self.next)]
+        text = (f"{why} Put amd on my PATH now makes the folder ~/.local/bin when it is missing, and the link "
+                f"~/.local/bin/amd to {target}. Nothing else in your home folder changes.\n\n"
+                f"Without the link, amd works by its full path: {target}")
+        return text, [("Put amd on my PATH now", "", "makes the link now", self.make_link),
+                      ("Not now", "", "", self.not_now)]
 
     def project_step(self):
         cfg, error = self.project()
@@ -135,18 +243,18 @@ class Setup(tui.Page):
                      "proposes which files Claude reads before a change in each folder.")
             return text, [("Continue", "", "", self.next)]
         if error:
-            return f"atlasmd.toml of this project has a problem.\n\n{error}", [("Continue", "", "", self.next)]
+            return f"atlasmd.toml of this repository has a problem.\n\n{error}", [("Continue", "", "", self.next)]
         if cfg is None:
             text = (f"This folder has no atlasmd.toml: {short(root)}.\n\n"
                     "amd init writes atlasmd.toml, four template files in docs/start/, and the empty folders "
                     "docs/decisions/, docs/plans/, docs/notes/ and docs/archive/. It overwrites nothing. In a Claude "
-                    "Code session, /amd:init does more: it reads the project, fills the four files, and proposes "
+                    "Code session, /amd:init does more: it reads the repository, fills the four files, and proposes "
                     "which files Claude reads before a change in each folder.")
             return text, [("Run amd init now", "", "writes in " + short(root) + " now", self.run_init),
                           ("Skip", "", "", self.next)]
         composed = start.compose(cfg)
         n = len(composed.files)
-        lines = [f"The project: {short(cfg.root)}", "",
+        lines = [f"The repository: {short(cfg.root)}", "",
                  "## At the start of a session",
                  f"Claude gets {n} file{'s' if n != 1 else ''}, about {composed.tokens:,} tokens. "
                  f"The limit in start.budget is {cfg.start.budget:,}." +
@@ -162,16 +270,35 @@ class Setup(tui.Page):
         lines += ["", "amd check shows the details."]
         return "\n".join(lines), [("Continue", "", "", self.next)]
 
+    def answer(self):
+        """The answer of the current station, on one line, for the stations that are done."""
+        if self.step == 2:
+            if os.name == "nt":
+                return f"add {amd_path().parent} to PATH"
+            return self.link_result[0] if self.link_result else "amd works in this terminal already"
+        if self.step == 3:
+            return (f"suggest /amd:init: {'yes' if self.offer else 'no'}   "
+                    f"characters per token: {self.chars:g}")
+        if self.step == 4:
+            root = cli.project_root(self.cwd)
+            if self.init_output is not None:
+                return f"amd init ran in {short(root)}"
+            cfg, error = self.project()
+            if error:
+                return "atlasmd.toml has a problem"
+            return f"atlasmd.toml is in {short(cfg.root)}" if cfg else f"skipped, no atlasmd.toml in {short(root)}"
+        return "Start" if self.step == 0 else "Continue"
+
     # ------------------------------------------------------------ actions
     def goto(self, step):
         self.step = step
         self.cursor = 0
-        self.scroll = 0
         self.follow = False
+        self.place = True
         self.say("")
-        self.scr.clear()
 
     def next(self):
+        self.answers[self.step] = self.answer()
         if self.step == len(STEPS) - 2:
             self.saved_to = cli.save_personal({"offer_setup": self.offer, "token_chars": round(self.chars, 2)})
         self.goto(self.step + 1)
@@ -197,12 +324,25 @@ class Setup(tui.Page):
         except cli.Problem as exc:
             self.say(str(exc), problem=True)
 
+    def make_link(self):
+        self.link_result = link_amd()
+        self.cursor = 0
+        self.follow = True
+
+    def not_now(self):
+        lines = ["Not now. To put amd on your PATH later, run this command once in a terminal:", "",
+                 "    " + link_line(), ""] + path_lines()
+        self.link_result = (f"not now. Later: {link_line()}", lines)
+        self.cursor = 0
+        self.follow = True
+
     def run_init(self):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
             code = cli.main(["init"], cwd=str(self.cwd))
         self.init_output = buf.getvalue()
         self.cursor = 0
+        self.follow = True
         if code != 0:
             self.say(self.init_output.strip().splitlines()[-1] if self.init_output.strip() else "amd init failed",
                      problem=True)
@@ -210,38 +350,49 @@ class Setup(tui.Page):
     def confirm_quit(self):
         if self.step in (0, len(STEPS) - 1):
             return True
-        note = "Leave the setup? Nothing is saved."
+        note = "Leave the setup? Your settings are not saved."
         if self.init_output is not None:
             note += " The files that amd init wrote stay."
+        if self.link_result is not None and self.link_result[0].startswith("~/.local/bin/amd links"):
+            note += " The link ~/.local/bin/amd stays."
         key = self.ask_key(note + "  y leaves, another key stays", HELP)
         self.say("")
         return key in (ord("y"), ord("Y"))
 
     # ------------------------------------------------------------ drawing
+    def stack(self, width):
+        """The rows under the route, as a terminal prints them: the logo, one line for each station that is
+        done, then the current station in full. Returns (rows, the row of the current heading, the row of its
+        first answer, the answers)."""
+        h, w = self.scr.getmaxyx()
+        rows = []
+        if h >= 24 and w >= 40:
+            rows += [("logo", line) for line in tui.LOGO] + [("tagline", tui.TAGLINE), ("blank", None)]
+        rows += [("done", i) for i in range(self.step)]
+        if self.step:
+            rows.append(("blank", None))
+        head = len(rows)
+        rows += [("current", self.step), ("blank", None)]
+        body, options = self.content()
+        rows += [("text", item) for item in tui.wrap(body, width)] + [("blank", None)]
+        first = len(rows)
+        rows += [("option", (i, option)) for i, option in enumerate(options)]
+        return rows, head, first, options
+
     def draw(self):
         curses = self.curses
         self.scr.erase()
         h, w = self.scr.getmaxyx()
         self.header(f"step {self.step + 1} of {len(STEPS)}")
-        y = 2
-        if self.step == 0 and h >= 24 and w >= 40:
-            for line in tui.LOGO:
-                self.put(y, 2, line, self.accent())
-                y += 1
-            self.put(y, 2, tui.TAGLINE, self.dim())
-            y += 2
-        self.draw_route(y, STEPS, self.step)
-        y += 3
-        self.put(y, 2, tui.fit(STEPS[self.step], w - 5), self.accent())
-        y += 2
-        width = min(76, max(20, w - 5))
-        body, options = self.content()
+        self.draw_route(2, STEPS, self.step)
+        top = 5
+        rows, head, first, options = self.stack(min(76, max(20, w - 7)))
         self.cursor = max(0, min(self.cursor, len(options) - 1))
-        rows = [("text", style, line) for style, line in tui.wrap(body, width)] + [("text", "plain", "")]
-        first = len(rows)
-        rows += [("option", i, opt) for i, opt in enumerate(options)]
         bottom = len(tui.footer_rows(HELP, w)) + 2
-        visible = max(1, h - y - bottom)
+        visible = max(1, h - top - bottom)
+        if self.place:  # a new station: the stack scrolls up, but never past the heading of the current station
+            self.scroll = min(head, max(0, len(rows) - visible)) if self.step else 0
+            self.place = False
         if self.follow:
             at = first + self.cursor
             if at < self.scroll:
@@ -250,19 +401,34 @@ class Setup(tui.Page):
                 self.scroll = at - visible + 1
             self.follow = False
         self.scroll = max(0, min(self.scroll, max(0, len(rows) - visible)))
-        top = y
+        self.shown = (first, visible)
+        name_w = max(len(name) for name in STEPS)
         label_w = max([len(o[0]) for o in options if o[1]] or [0])
-        for row in rows[self.scroll:self.scroll + visible]:
-            if row[0] == "text":
-                _, style, line = row
-                attr = self.accent() if style == "heading" else 0
-                self.put(y, 2, line, attr)
-            else:
-                _, i, (label, value, hint, _action) = row
+        y = top
+        for kind, data in rows[self.scroll:self.scroll + visible]:
+            if kind == "logo":
+                self.put(y, 2, data, self.accent())
+            elif kind == "tagline":
+                self.put(y, 2, data, self.dim())
+            elif kind == "done":
+                self.put(y, 2, f"{tui.PASSED} {STEPS[data]}", self.dim())
+                self.put(y, 4 + name_w + 2, tui.fit(self.answers.get(data, ""), w - name_w - 9), self.dim())
+            elif kind == "current":
+                self.put(y, 2, f"{tui.CURRENT} {STEPS[data]}", self.accent())
+            elif kind == "text":
+                style, line = data
+                if style == "heading":
+                    self.put(y, 4, line, self.accent())
+                elif style == "command":
+                    self.put(y, 6, line, curses.A_BOLD)
+                else:
+                    self.put(y, 4, line)
+            elif kind == "option":
+                i, (label, value, hint, _action) = data
                 selected = i == self.cursor
-                self.put(y, 2, "›" if selected else " ", self.accent())
-                self.put(y, 4, tui.fit(label, w - 8), curses.A_BOLD if selected else 0)
-                x = 4 + (max(label_w, len(label)) if value else len(label)) + 2
+                self.put(y, 4, "›" if selected else " ", self.accent())
+                self.put(y, 6, tui.fit(label, w - 10), curses.A_BOLD if selected else 0)
+                x = 6 + (max(label_w, len(label)) if value else len(label)) + 2
                 if value:
                     self.put(y, x, value, curses.A_BOLD)
                     x += len(value) + 2
@@ -275,6 +441,11 @@ class Setup(tui.Page):
             self.put(h - bottom, max(2, w - 10), "↓ more", self.dim())
         self.footer(HELP)
         self.scr.refresh()
+
+    def answer_shown(self):
+        """True when the answer under the cursor was on the screen at the last draw."""
+        first, visible = self.shown
+        return self.scroll <= first + self.cursor < self.scroll + visible
 
     def loop(self):
         curses = self.curses
@@ -293,7 +464,9 @@ class Setup(tui.Page):
                 else:
                     self.scroll -= 1
             elif key in (curses.KEY_DOWN, ord("j")):
-                if self.cursor < len(options) - 1:
+                if not self.answer_shown() and self.scroll < self.shown[0] + self.cursor:
+                    self.scroll += 1  # the text first: the answers come into view one row at a time
+                elif self.cursor < len(options) - 1:
                     self.cursor, self.follow = self.cursor + 1, True
                 else:
                     self.scroll += 1
@@ -305,7 +478,9 @@ class Setup(tui.Page):
                 self.back()
             elif key in (curses.KEY_ENTER, 10, 13, ord(" ")):
                 self.cursor = max(0, min(self.cursor, len(options) - 1))
-                if options[self.cursor][3]() == "quit":
+                if not self.answer_shown():
+                    self.follow = True  # an answer is picked only when it is on the screen
+                elif options[self.cursor][3]() == "quit":
                     return 0
 
 

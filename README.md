@@ -6,7 +6,7 @@ atlasmd is a hook inside Claude Code, written in Python with no dependencies, wi
 command line, `amd`. It does four things:
 
 1. **At the start of a session, and after every compaction,** it gives Claude the
-   Markdown files in `docs/start/` of your project, and nothing else. Claude Code takes
+   Markdown files in `docs/start/`, not the whole repository. Claude Code takes
    at most 10,000 characters from a hook. When the files fit, Claude gets their text.
    When they do not, Claude gets the text of the first files as far as the limit lets,
    the list of the rest, and reads each file of the list with one Read. So a fresh
@@ -19,7 +19,7 @@ command line, `amd`. It does four things:
    `atlasmd.toml` does not list, the hook tells Claude once to write the README.md of
    the folder and its entry in `atlasmd.toml`.
 3. **After every compaction,** it writes one line to `compacts.log`: the date and time,
-   the project folder, whether the compaction was manual or automatic, and the size of
+   the repository folder, whether the compaction was manual or automatic, and the size of
    the summary in characters. So you can see what compactions cost.
 4. **At every hook event,** it adds the token counts of the session from its transcript
    to one record per session. `amd meter` shows the records and compares a session with
@@ -44,17 +44,46 @@ Or in a Claude Code session:
 /plugin install amd --marketplace simon-init/atlasmd
 ```
 
-Then put the command line on your path, once. On Linux and macOS:
+Or from a folder, for example a clone of the repository in `~/atlasmd`:
+
+```
+git clone https://github.com/simon-init/atlasmd ~/atlasmd
+claude plugin marketplace add ~/atlasmd
+claude plugin install amd@atlasmd
+```
+
+### The command amd in your terminal
+
+In a Claude Code session, the skills of atlasmd run `amd` by the full path of the plugin,
+so Claude needs nothing more. To run `amd` in your own terminal too, put it on your PATH
+once. The station "The command amd" of `amd setup` does it when you pick "Put amd on my
+PATH now": it makes the folder `~/.local/bin` when it is missing, and the link
+`~/.local/bin/amd` to `bin/amd` of the plugin. Nothing else in your home folder changes.
+It then says whether `~/.local/bin` is on the PATH of your shell, and when it is not, it
+gives the line for the start file of fish, zsh or bash. On "Not now", it gives the
+command to run later.
+
+To make the link yourself, on Linux and macOS, after an install from GitHub:
 
 ```
 ln -s ~/.claude/plugins/marketplaces/atlasmd/bin/amd ~/.local/bin/amd
 ```
 
-On Windows, add this folder to your PATH. The launcher in it is `amd.cmd`:
+After an install from a folder, the link goes to `bin/amd` in that folder, for example:
+
+```
+ln -s ~/atlasmd/bin/amd ~/.local/bin/amd
+```
+
+On Windows, add the `bin` folder to your PATH. The setup does not change PATH on Windows.
+The launcher in the folder is `amd.cmd`. After an install from GitHub, the folder is:
 
 ```
 %USERPROFILE%\.claude\plugins\marketplaces\atlasmd\bin
 ```
+
+Without the link, `amd` works by its full path, for example
+`~/.claude/plugins/marketplaces/atlasmd/bin/amd setup` or `~/atlasmd/bin/amd setup`.
 
 The hook and the command line need Python 3.11 or newer and git. The plugin installs
 nothing else. The three screens, `amd setup`, `amd config` and `amd meter`, need the curses module.
@@ -63,7 +92,7 @@ Every other command works without it.
 
 ## Quick start
 
-In a Claude Code session, in your project:
+In a Claude Code session, in your repository:
 
 ```
 /amd:init
@@ -80,16 +109,25 @@ message and asks you once:
 After your yes, Claude writes `atlasmd.toml`, writes the four files of `docs/start/`,
 and moves the files that you agreed to move. It commits nothing unless you ask.
 
-In a terminal, once after the install:
+In a terminal, once after the install, run the setup by the full path of `amd`. After an
+install from GitHub:
 
 ```
-amd setup
+~/.claude/plugins/marketplaces/atlasmd/bin/amd setup
 ```
 
-This command opens a screen with five steps: what atlasmd does, how it works, your own
-settings, this project, and three commands to remember. It saves your settings at the
-last step. On the step for this project, you can run `amd init`, which writes its files
-at once.
+After an install from a folder, for example `~/atlasmd`:
+
+```
+~/atlasmd/bin/amd setup
+```
+
+This command opens a screen with six steps: what atlasmd does, how it works, the command
+`amd` on your PATH, your own settings, this repository, and three commands to remember.
+The screen prints each step under the one before, as a terminal does. A step that is done
+shows its answer on one line in the dim color. It saves your settings at the last step.
+On the step for the command `amd`, you can make the link `~/.local/bin/amd`. On the step
+for this repository, you can run `amd init`, which writes its files at once.
 
 ## Where the Markdown files go, and their names
 
@@ -121,7 +159,7 @@ folder gives the kind.
 `amd check` reports a file whose name does not match the rule of its folder. It also
 reports a Markdown file that is not in `docs/start/`, not under `pack`, and not in a
 folder under `[naming]`, because no rule says when Claude reads that file. The check
-does not report files at the root of the project, files in folders whose names start
+does not report files at the root of the repository, files in folders whose names start
 with a dot, `CLAUDE.md`, `AGENTS.md` and `SKILL.md`. These files are for people and
 for Claude Code. The check renames nothing.
 
@@ -182,20 +220,20 @@ findings of its row off with `false` or `0`.
 | `no-entry` | `<folder>/ has source files and no [[area]] entry in atlasmd.toml lists it. Run /amd:area <folder>.` The same folders, when the paths of no `[[area]]` entry hold a source file of the folder. | `folders` |
 | `dead-entry` | `the [[area]] "<name>" lists <path>, which does not exist. Remove it or fix the path.` For each path under `paths`. | `folders` |
 | `stale-readme` | `<README> did not change in the last <N> commits that changed <folder>/. Update its State section.` For each README.md under `pack`. The count starts at the last commit of the README. When the paths of the `[[area]]` entry hold the folder of the README, the commits that change that folder count. When the paths lie inside that folder, the commits that change those paths count, and the text names them. | `stale_readme`, 15 commits |
-| `dead-pointer` | `docs/start/20-open-items.md names <path>, which does not exist. Fix the line or remove it.` A path is a text in backticks that has a `/` or ends in `.md`, from the root of the project. A text with a space, a URL and a text with `<` do not count. The file is `start.items`. | `dead_pointers` |
+| `dead-pointer` | `docs/start/20-open-items.md names <path>, which does not exist. Fix the line or remove it.` A path is a text in backticks that has a `/` or ends in `.md`, from the root of the repository. A text with a space, a URL and a text with `<` do not count. The file is `start.items`. | `dead_pointers` |
 | `orphan-plan` | `docs/plans/<file> is named by no line of docs/start/20-open-items.md. Add a line, or move the plan to docs/archive/ if it is built.` | `plans` |
 | `orphan-note` | `docs/notes/<file> is named by no Markdown file and is <days> days old. Point at it, or move it to docs/archive/.` The age comes from the date at the start of the name, else from the date of the last commit of the file. The list that `amd map` writes and the files in `docs/archive/` do not count as a name. | `notes`, 30 days |
 | `no-index-line` | `docs/decisions/<file> has no line in docs/decisions/README.md. Add the line.` The number at the start of the file name must be in the index, for example `P012` or `P12` for `P012-policy.md`. | `decisions` |
 | `stale-state` | `<state file> did not change in the last <N> commits. Rewrite it with /amd:end.` | `stale_state`, 20 commits |
 
 The folders `docs/plans/`, `docs/notes/` and `docs/decisions/` are the folders under
-`[naming]` whose last names are `plans`, `notes` and `decisions`. When a project does
+`[naming]` whose last names are `plans`, `notes` and `decisions`. When a repository does
 not have one of these folders, its check does not run. The checks that count commits
 run only in a git repository with a commit.
 
-## The settings of a project: `atlasmd.toml`
+## The settings of a repository: `atlasmd.toml`
 
-The file is at the root of the project. `amd init` writes it with every default and a
+The file is at the root of the repository. `amd init` writes it with every default and a
 comment on each key. Every path is relative to the folder of `atlasmd.toml`, with `/`
 as the separator.
 
@@ -206,7 +244,7 @@ as the separator.
 | `start.files` | `[]` | A list of paths in order. When it has paths, the hook uses it, not `start.dir`. |
 | `start.also` | `[]` | More folders or files. Claude gets them after the files above. |
 | `start.budget` | `30000` | The limit for these files, in estimated tokens. Above it, the hook gives Claude the list of the files and a warning, not their text. |
-| `start.inject` | `true` | `true`: the hook puts the text of the files into Claude's context. `false`: the hook always gives the list of the files, and Claude reads them. |
+| `start.inject` | `true` | It says whether the start files go in as text, when they fit, or always as a list. `true`: Claude gets the text of the start files when they fit in 10,000 characters. `false`: Claude always gets the list of the files and reads each one. The screen of `amd config` calls it "start files as text". |
 | `start.state` | `"docs/start/30-state.md"` | The file that says where the work stands. `/amd:end` writes it again. |
 | `start.map` | `"docs/start/10-map.md"` | The map file. `amd map` writes the list of every Markdown file and the table of the `[[area]]` entries into it. A subagent gets it at its start. |
 | `start.line` | `"Say where things stand."` | The first message that a person sends in a fresh chat. `amd end` and `/amd:end` show it. |
@@ -286,22 +324,43 @@ a session starts there. If no session starts in a repository of the group, run
 
 ## The screen of amd config
 
-`amd config` opens a screen with three stations on a route:
+`amd config` opens a screen with four stations on a route:
 
-1. **Repositories.** A table of every repository of the list: the name, the path, the
-   group, `guard.mode`, `start.inject`, `start.budget`, the number of files in
-   `docs/start/` and their tokens, and the number of Markdown files. On a row, `g` types
-   the group, `m` changes `guard.mode` to deny, remind or off, `i` changes
-   `start.inject`, and `b` types `start.budget`. A changed value shows in the accent
-   color until you save it. Enter opens the settings of the row.
-2. **The settings of one repository**, with its name on the route. The values of its
+1. **About.** What atlasmd does in three sentences, how to set up a repository in three
+   steps (`amd init` in the root, or `/amd:init` in a session, then `amd map`, then
+   `amd check`), every command of `amd` with one line each, the seven skills, and the
+   three ways to turn atlasmd off. `↑` and `↓` scroll.
+2. **Repositories.** A table of every repository of the list: the name, the path, the
+   group, `guard.mode`, "start files as text" (`start.inject`), `start.budget`, the
+   start files and their tokens, and the number of Markdown files. The table sorts by
+   the name of the group, with the repositories without a group last, and by name inside
+   a group. The start files are the files that a session there gets at the start. When
+   some come from `start.also` or from the group, the word follows the number: `4` are
+   the repository's own files, `4 from group` come from the other repositories of the
+   group, and `2 + 3 from also` are two own files and three from `start.also`. A
+   repository whose sessions get nothing shows `0`, and a sentence under the table says
+   so. On a row, `g` types the group, and the row moves to its group at once. `m`
+   changes `guard.mode` to deny, remind or off, `i` changes "start files as text", and
+   `b` types `start.budget`. A changed value shows in the accent color until you save it.
+   `r` removes the repository from the list after one question. Enter opens the settings
+   of the row.
+3. **The settings of one repository**, with its name on the route. The values of its
    `atlasmd.toml`, its `[[area]]` entries and your own settings. You can change
-   `start.budget`, `start.inject`, `guard.mode`, `agents.inject` and your own settings
-   there. The screen shows the `[[area]]` entries but cannot change them.
-3. **Files.** The Markdown files of the repository as a tree, from `amd scan`, with
+   `start.budget`, "Give the start files as text when they fit in 10,000 characters"
+   (`start.inject`), `guard.mode`, what a subagent gets (`agents.inject`) and your own
+   settings there. The screen shows the `[[area]]` entries but cannot change them.
+4. **Files.** The Markdown files of the repository as a tree, from `amd scan`, with
    their tokens. The word `private` marks a file that `[private] files` names. `p` on a
    file adds it to `[private] files` and to `.git/info/exclude`, so git does not commit
    it. `p` on a private file removes it from both. `p` writes at once.
+
+`r` and `amd config --remove <path>` remove a repository from the list in
+`~/.claude/plugins/data/amd/projects.toml`, and nothing else. `atlasmd.toml`,
+`docs/start/` and every other file of the repository stay. The other repositories of its
+group stop getting its `docs/start/`. `amd init`, `amd config` or the next session start
+in that repository puts it back on the list. To turn atlasmd off in a repository and keep
+it on the list, set `guard.mode` to off with `m`: the hook then refuses no edit there.
+To stop the start files too, delete `atlasmd.toml` in that repository.
 
 `tab` goes to the next station, shift-tab to the one before, and Escape to Repositories.
 `s` saves, `q` quits. In a repository, the screen opens on the settings of that
@@ -316,9 +375,10 @@ Three plain forms do the same without the screen, for a script or a skill:
 
 | Command | What it does |
 |---|---|
-| `amd config --list` | Prints the table of the repositories. |
+| `amd config --list` | Prints the table of the repositories, and the sentence for each repository whose sessions get nothing at the start. |
 | `amd config --set <path> <key> <value>` | Writes one key into `atlasmd.toml` of the repository at `<path>`, or of the repository of the list with that name. The keys are `group`, `guard.mode`, `start.inject` and `start.budget`. |
-| `amd config --json` | Prints the table as JSON. |
+| `amd config --json` | Prints the table as JSON. `start_files` and `start_tokens` are the files that a session gets at the start, `own_files` the files of the repository itself, and `start_from` is `also`, `group`, both or empty. |
+| `amd config --remove <path>` | Removes the repository at `<path>`, or the repository of the list with that name, from the list. No file of the repository changes. |
 
 ## The meter
 
@@ -382,7 +442,7 @@ The plain forms:
 
 | Command | What it does |
 |---|---|
-| `amd meter --list` | Prints the newest session and the history. |
+| `amd meter --list` | Prints the newest session and the history. In a folder without `atlasmd.toml` above it, it prints the sessions of every repository, the newest first. |
 | `amd meter --compare <session> <session>` | Prints the comparison of two sessions. The first characters of a session id are enough. |
 | `amd meter --json` | Prints the records of this repository as JSON. |
 
@@ -426,12 +486,12 @@ event.
 
 ## Your own settings
 
-Two settings apply to every project on your computer. `amd set` writes them into
+Two settings apply to every repository on your computer. `amd set` writes them into
 `~/.claude/plugins/data/amd/settings.toml`, and `amd setup` and `amd config` show them:
 
 | Key | Default | What it does |
 |---|---|---|
-| `offer_setup` | `yes` | In a project without `atlasmd.toml`, the hook tells Claude once that `/amd:init` writes `atlasmd.toml` and `docs/start/`. |
+| `offer_setup` | `yes` | In a repository without `atlasmd.toml`, the hook tells Claude once that `/amd:init` writes `atlasmd.toml` and `docs/start/`. |
 | `token_chars` | `2.5` | The number of characters per token. atlasmd divides the characters of a file by this number to estimate its tokens. 2.5 is a careful value for English and code. |
 
 The plugin also has the option `offer_setup` in Claude Code. When that option is set,
@@ -442,8 +502,8 @@ it wins over the settings file.
 | Command | What it does |
 |---|---|
 | `amd` | Prints the logo, one paragraph on what atlasmd does, and the commands. |
-| `amd setup` | Opens a screen with five steps. Run it once after the install. You can run it again: it changes only your two settings, and `amd init` overwrites no file. |
-| `amd config` | Opens a screen with your repositories, the settings of each one and its Markdown files. See [The screen of amd config](#the-screen-of-amd-config). `--list`, `--set` and `--json` do the same without the screen. |
+| `amd setup` | Opens a screen with six steps. Run it once after the install. You can run it again: it changes only your two settings, the link `~/.local/bin/amd` when you pick it, and `amd init` overwrites no file. |
+| `amd config` | Opens a screen with the commands, your repositories, the settings of each one and its Markdown files. See [The screen of amd config](#the-screen-of-amd-config). `--list`, `--set`, `--json` and `--remove` do the same without the screen. |
 | `amd scan` | Lists every Markdown file with its size in KB and its estimated tokens, the folders with source files and a README, and the files that `CLAUDE.md` names. `--json` gives the same as JSON. |
 | `amd init` | Writes `atlasmd.toml`, the four files of `docs/start/`, and the folders `docs/decisions/`, `docs/plans/`, `docs/notes/` and `docs/archive/`. It overwrites nothing. `--areas-json <file>` adds the `[[area]]` entries of a JSON file. `--dry-run` writes nothing. |
 | `amd check` | Reports the tokens of the files in `docs/start/` against `start.budget` and against the 10,000 characters of a hook, files under `pack` that do not exist, `[[area]]` entries whose paths overlap, file names that break the rule of their folder, Markdown files that no rule tells Claude to read, a map file that is out of date, and the nine findings of [What amd check reports on the folders and the Markdown files](#what-amd-check-reports-on-the-folders-and-the-markdown-files). Exit code 1 on a problem. `--json` for the skill. |
@@ -456,6 +516,18 @@ it wins over the settings file.
 | `amd statusline` | Prints one line for the status line of Claude Code. See [The status line](#the-status-line). |
 | `amd set <key> <value>` | Writes one of your own settings. |
 | `amd version` | Prints the version. |
+
+`amd check`, `amd map`, `amd area`, and `amd meter` without `--list`, need `atlasmd.toml`.
+In a folder without `atlasmd.toml` in it or above it, they print this sentence and exit
+with code 1:
+
+```
+Run this in a repository that has atlasmd.toml, in its root or in a folder under it. amd init sets one up.
+```
+
+`amd`, `amd setup`, `amd config`, `amd meter --list` and `amd version` work in any
+folder. Every other command works without `atlasmd.toml`. `/amd:init` runs `amd scan` and
+`amd init` before the file exists.
 
 In a Claude Code session, seven skills run the command line for you:
 
@@ -566,10 +638,10 @@ and which files it keeps.
 claude plugin uninstall amd@atlasmd
 ```
 
-Then remove the link to `amd` from your path. The lists of read files, `compacts.log`,
+Then delete the link `~/.local/bin/amd`, if you made it. The lists of read files, `compacts.log`,
 your settings, the list of repositories and the records of the meter stay in
 `~/.claude/plugins/data/amd/` until you delete that folder.
-The files of your project, `atlasmd.toml` and `docs/start/`, stay in the project.
+The files of your repository, `atlasmd.toml` and `docs/start/`, stay in the repository.
 
 ## License
 

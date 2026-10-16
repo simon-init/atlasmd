@@ -20,7 +20,7 @@ elif os.path.dirname(_HERE) not in sys.path:
 from atlasmd import __version__, areas, config, ledger, mapping, meter, naming, projects, scan, start, tomledit, tui, upkeep  # noqa: E402,E501
 
 COMMANDS = [
-    ("setup", "set up atlasmd on a screen with five steps"),
+    ("setup", "set up atlasmd on a screen with six steps"),
     ("config", "show and change atlasmd.toml of each repository"),
     ("scan", "list every Markdown file with its size in tokens"),
     ("init", "write atlasmd.toml and docs/start/, overwrite nothing"),
@@ -48,12 +48,33 @@ OPTIONS = [
     ("config --set <path> <key> <value>", "write one key into atlasmd.toml there:"),
     ("", "group, guard.mode, start.inject or start.budget"),
     ("config --json", "the table as JSON, for a skill"),
+    ("config --remove <path>", "remove a repository from the list only"),
     ("meter --list", "the same as the screen, as text"),
     ("meter --compare <id> <id>", "compare two sessions"),
     ("meter --json", "the records of this repository as JSON"),
 ]
 ABOUT = ("atlasmd tells Claude which Markdown files to read at the start of a session, and refuses a change "
          "to a file in a listed folder until Claude has read the files listed for that folder.")
+SKILLS = [
+    ("/amd:init", "write atlasmd.toml and docs/start/ after one question"),
+    ("/amd:check", "run amd check and make the fixes that you agree to"),
+    ("/amd:map", "run amd map and say what changed in the map file"),
+    ("/amd:area <folder>", "write the README.md and the [[area]] entry of a folder"),
+    ("/amd:status", "say which files under pack this session read"),
+    ("/amd:why", "explain the last edit that the hook refused"),
+    ("/amd:end", "run amd check, move the built plans, write start.state again, commit"),
+]
+# What atlasmd does, in three sentences: the welcome of amd setup and the About station of amd config.
+WHAT = [
+    "At the start of a session, and after every compaction, the hook gives Claude the Markdown files in "
+    "docs/start/, not the whole repository.",
+    "Before an edit of a file in a folder that atlasmd.toml lists, the hook refuses the edit until Claude has "
+    "read the files listed for that folder.",
+    "After every compaction, Claude reads those files again before its next edit there, and the hook writes the "
+    "size of the summary to compacts.log.",
+]
+NO_REPOSITORY = ("Run this in a repository that has atlasmd.toml, in its root or in a folder under it. "
+                 "amd init sets one up.")
 
 TEMPLATES = {
     "map": """# What this project is, and where its files are
@@ -162,7 +183,7 @@ def load_config(cwd):
     """The configuration for cwd. Problem when there is none or it cannot be used."""
     path = config.find(cwd)
     if path is None:
-        raise Problem(f"There is no atlasmd.toml in {cwd} or above it. Run amd init, or /amd:init in a session.", 1)
+        raise Problem(NO_REPOSITORY, 1)
     try:
         return config.load(path)
     except config.ConfigError as exc:
@@ -290,7 +311,7 @@ def cmd_help():
         out(f"  {label.ljust(width)}  {text}")
     out()
     out("  The skills in a Claude Code session:")
-    out("  /amd:init  /amd:check  /amd:map  /amd:area  /amd:status  /amd:why  /amd:end")
+    out("  " + "  ".join(name.split()[0] for name, _ in SKILLS))
     return 0
 
 
@@ -699,10 +720,10 @@ def cmd_check(cwd, args):
 # ---------------------------------------------------------------- area
 def cmd_area(cwd, args):
     opts, rest = parse(args, values=("--name",))
+    cfg = load_config(cwd)
     if len(rest) != 1:
         raise Problem("amd area takes one folder: amd area services/billing, or amd area services/billing "
                       "--name \"the billing\".")
-    cfg = load_config(cwd)
     root = cfg.root
     target = Path(rest[0]) if os.path.isabs(rest[0]) else Path(cwd) / rest[0]
     folder = rel(root, target).rstrip("/")
@@ -1076,18 +1097,47 @@ def repository_info(entry):
     except config.ConfigError as exc:
         info["error"] = str(exc)
         return info
-    own = start.own_files(cfg)
+    # The files that a session there gets at the start: its own, then start.also, then the group, each once.
+    own = {config.norm(p) for p in start.own_files(cfg)}
+    also = {config.norm(p) for p in start.files(cfg)} - own
+    paths, _others = start.with_group(cfg)
+    sources = ["own" if config.norm(p) in own else "also" if config.norm(p) in also else "group" for p in paths]
     token_chars = config.personal()["token_chars"]
     info.update({"group": cfg.group, "guard_mode": cfg.guard.mode, "start_inject": cfg.start.inject,
-                 "start_budget": cfg.start.budget, "start_files": len(own),
-                 "start_tokens": sum(start.estimate_tokens(scan.read_text(p).rstrip(), token_chars) for p in own),
+                 "start_budget": cfg.start.budget, "start_dir": cfg.start.dir, "own_files": sources.count("own"),
+                 "start_files": len(paths),
+                 "start_from": " and ".join(w for w in ("also", "group") if w in sources),
+                 "start_tokens": sum(start.estimate_tokens(scan.read_text(p).rstrip(), token_chars) for p in paths),
                  "markdown_files": len(scan.markdown_files(root))})
     return info
 
 
-REPO_HEAD = ("repository", "path", "group", "guard.mode", "start.inject", "start.budget", "docs/start/", "tokens",
-             "Markdown files")
+REPO_HEAD = ("repository", "path", "group", "guard.mode", "start files as text", "start.budget", "start files",
+             "tokens", "Markdown files")
 REPO_RIGHT = (False, False, False, False, False, True, True, True, True)
+
+
+def repository_order(name, group, path=""):
+    """The order of the table: by group name, the repositories without a group last, by name inside a group."""
+    return (not group, (group or "").lower(), name.lower(), str(path))
+
+
+def start_cell(info):
+    """The number of the start files, with the words also or group when they come from there:
+    4, 4 from group, or 4 + 2 from also and group."""
+    n, own, source = info["start_files"], info["own_files"], info["start_from"]
+    if not source:
+        return number(n)
+    return f"{number(n)} from {source}" if own == 0 else f"{number(own)} + {number(n - own)} from {source}"
+
+
+def nothing_sentence(info):
+    """The sentence under the table for a repository whose sessions get no start files."""
+    if info["group"]:
+        why = f"{info['start_dir']}/, start.also and the group \"{info['group']}\" give no Markdown file"
+    else:
+        why = f"{info['start_dir']}/ and start.also give no Markdown file, and it has no group"
+    return f"{info['name']}: a session there gets nothing at the start, because {why}."
 
 
 def repository_cells(info, values=None):
@@ -1098,8 +1148,8 @@ def repository_cells(info, values=None):
     group = v.get(("", "group"), info["group"])
     inject = v.get(("start", "inject"), info["start_inject"])
     return (info["name"], tilde(info["path"]), group or "none", v.get(("guard", "mode"), info["guard_mode"]),
-            "true" if inject else "false", number(v.get(("start", "budget"), info["start_budget"])),
-            number(info["start_files"]), number(info["start_tokens"]), number(info["markdown_files"]))
+            "yes" if inject else "no", number(v.get(("start", "budget"), info["start_budget"])),
+            start_cell(info), number(info["start_tokens"]), number(info["markdown_files"]))
 
 
 def write_values(path, changes):
@@ -1162,6 +1212,32 @@ def find_repository(cwd, ident):
                   "amd config --list shows the list.")
 
 
+def list_entry(cwd, ident):
+    """The entry of the list for a path or a name. The folder and its atlasmd.toml need not exist."""
+    entries = projects.load()
+    target = Path(os.path.expanduser(ident))
+    target = Path(os.path.abspath(target if target.is_absolute() else Path(cwd) / target))
+    found = config.find(target) if target.exists() else None
+    keys = {config.norm(target)} | ({config.norm(found.parent)} if found else set())
+    for entry in entries:
+        if config.norm(entry["path"]) in keys:
+            return entry
+    named = [e for e in entries if e["name"] == ident]
+    if len(named) == 1:
+        return named[0]
+    if named:
+        raise Problem(f"{len(named)} repositories of the list have the name {ident}. Give the path of the one to "
+                      "remove. amd config --list shows the paths.")
+    raise Problem(f"{ident} is not on the list in {tilde(projects.path())}. amd config --list shows the list.")
+
+
+def removed_text(name, path):
+    """The sentence after a removal from the list."""
+    return (f"{name} left the list in {tilde(projects.path())}. Nothing in {tilde(path)} changed: atlasmd.toml, "
+            "docs/start/ and every other file stay. amd init, amd config or the next session start there puts it "
+            "back on the list.")
+
+
 def toggle_private(cfg, rel_path):
     """Add a file to [private] files of atlasmd.toml and to .git/info/exclude, or remove it from both.
     Returns the sentence for the person."""
@@ -1199,11 +1275,20 @@ def cmd_config(cwd, args):
         cfg = write_values(root / config.CONFIG_NAME, {SET_KEYS[key]: value})
         out(f"{cfg.root.name}: {key} = {tomledit.literal(value)} in {tilde(cfg.path)}")
         return 0
+    if args and args[0] == "--remove":
+        if len(args) != 2:
+            raise Problem("amd config --remove takes one repository of the list, by its path or its name, for "
+                          "example: amd config --remove ~/old-api")
+        entry = list_entry(cwd, args[1])
+        projects.remove(entry["path"])
+        out(removed_text(entry["name"], entry["path"]))
+        return 0
     opts, _ = parse(args, flags=("--list", "--json"))
     register_here(cwd)
     if not (opts.get("--list") or opts.get("--json")):
         return cmd_screen("config")
-    infos = [repository_info(e) for e in projects.load()]
+    infos = sorted((repository_info(e) for e in projects.load()),
+                   key=lambda i: repository_order(i["name"], i["group"], i["path"]))
     if opts.get("--json"):
         out(json.dumps({"list": str(projects.path()), "repositories": infos}, indent=2, ensure_ascii=False))
         return 0
@@ -1215,11 +1300,12 @@ def cmd_config(cwd, args):
         return 0
     for line in meter.table(REPO_HEAD, [repository_cells(i) for i in infos], REPO_RIGHT):
         out(line)
-    bad = [i for i in infos if i["error"]]
-    if bad:
+    nothing = [nothing_sentence(i) for i in infos if not i["error"] and not i["start_files"]]
+    bad = [f"{i['name']}: {i['error']}" for i in infos if i["error"]]
+    if nothing or bad:
         out()
-        for i in bad:
-            out(f"{i['name']}: {i['error']}")
+        for line in nothing + bad:
+            out(line)
     return 0
 
 
@@ -1232,7 +1318,9 @@ def cmd_meter(cwd, args):
                           "amd meter --list shows the sessions.")
         compare, args = args[1:], []
     opts, _ = parse(args, flags=("--list", "--json"))
-    cfg = load_config(cwd)
+    if compare is None and opts.get("--list") and config.find(cwd) is None:
+        out("\n".join(meter.render_all([meter.refresh(r) for r in meter.records()])))
+        return 0
     if compare:
         everything = meter.records()
         pair = []
@@ -1246,6 +1334,7 @@ def cmd_meter(cwd, args):
         for line in meter.render_compare(*pair):
             out(line)
         return 0
+    cfg = load_config(cwd)
     found = [meter.refresh(r) for r in meter.records(cfg.root)]
     if opts.get("--json"):
         out(json.dumps({"root": str(cfg.root), "sessions": [meter.summary(r) for r in found]}, indent=2,

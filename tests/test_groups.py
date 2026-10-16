@@ -5,16 +5,18 @@ import io
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 HOOK = REPO / "atlasmd" / "hook.py"
 sys.path.insert(0, str(REPO))
 
-from atlasmd import cli, config, projects, screen  # noqa: E402
+from atlasmd import cli, config, projects, screen, setup  # noqa: E402
 
 GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
@@ -190,7 +192,7 @@ class ConfigForms(Base):
         head = next(i for i, line in enumerate(lines) if line.startswith("repository"))
         self.assertEqual(lines[head].split("  ")[0], "repository")
         row = lines[head + 1].split()
-        self.assertEqual((row[0], row[2], row[3], row[4], row[5], row[6]), ("api", "shop", "deny", "true", "30,000", "2"))
+        self.assertEqual((row[0], row[2], row[3], row[4], row[5], row[6]), ("api", "shop", "deny", "yes", "30,000", "2"))
         self.assertEqual(lines[head + 2].split()[2], "none")
         data = json.loads(self.amd("config", "--json")[1])
         self.assertEqual([r["name"] for r in data["repositories"]], ["api", "web"])
@@ -226,6 +228,250 @@ class ConfigForms(Base):
         text = '[private]\nfiles = [\n  "a.md",\n  "b.md",\n]   # the files\n\n[naming]\n"docs" = "x"\n'
         new = screen.set_toml_value(text, "private", "files", ["a.md"])
         self.assertEqual(new, '[private]\nfiles = ["a.md"]   # the files\n\n[naming]\n"docs" = "x"\n')
+
+
+def rows(text):
+    """The rows of the table that amd config --list prints, as {name: cells}, and the names in their order."""
+    lines = text.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.startswith("repository"))
+    found, order = {}, []
+    for line in lines[head + 1:]:
+        if not line.strip():
+            break
+        cells = re.split(r"\s{2,}", line.strip())
+        found[cells[0]] = cells
+        order.append(cells[0])
+    return found, order
+
+
+class FakeScreen:
+    """The parts of the screen of amd config that the station Repositories uses, without curses."""
+    curses = types.SimpleNamespace(KEY_UP=259, KEY_DOWN=258, KEY_ENTER=343)
+    sort = screen.Config.sort
+    drop = screen.Config.drop
+    repo = screen.Config.repo
+
+    def __init__(self, typed="", answer="y"):
+        self.repos = [screen.Repo(e["path"], e["name"], e["group"]) for e in projects.load()]
+        screen.sort_repos(self.repos)
+        self.typed, self.answer, self.said, self.views = typed, answer, [], {}
+        self.repositories = screen.Repositories(self)
+
+    def ask_line(self, prompt):
+        return self.typed
+
+    def ask_key(self, question, keys):
+        self.said.append(question)
+        return ord(self.answer)
+
+    def say(self, text, problem=False):
+        self.said.append(text)
+
+    def names(self):
+        return [r.name for r in self.repos]
+
+
+class StartFiles(Base):
+    def test_the_table_shows_the_start_files_of_the_group_and_of_also_and_a_sentence_for_none(self):
+        api = self.repo("api", "shop", ["10-map.md", "20-open-items.md"])
+        app = self.repo("app", "shop", ["10-map.md"])
+        web = self.repo("web", "shop", [])
+        blog = self.repo("blog", None, [], also=["../api/docs/start"])
+        lonely = self.repo("lonely", None, [])
+        for root in (api, app, web, blog, lonely):
+            projects.touch(root, "")
+        code, text = self.amd("config", "--list")
+        self.assertEqual(code, 0, text)
+        found, _order = rows(text)
+        self.assertEqual(found["web"][6:8], ["3 from group", found["api"][7]])
+        self.assertEqual(found["blog"][6], "2 from also")
+        self.assertEqual(found["app"][6], "1 + 2 from group")
+        self.assertEqual(found["lonely"][6:8], ["0", "0"])
+        self.assertNotEqual(found["web"][7], "0")
+        self.assertIn("lonely: a session there gets nothing at the start, because docs/start/ and start.also give "
+                      "no Markdown file, and it has no group.", text)
+        self.assertNotIn("web: a session there gets nothing", text)
+        data = {r["name"]: r for r in json.loads(self.amd("config", "--json")[1])["repositories"]}
+        self.assertEqual((data["web"]["start_files"], data["web"]["own_files"], data["web"]["start_from"]), (3, 0, "group"))
+        self.assertEqual((data["blog"]["start_files"], data["blog"]["start_from"]), (2, "also"))
+        self.assertEqual((data["lonely"]["start_files"], data["lonely"]["start_tokens"]), (0, 0))
+
+
+class Order(Base):
+    def test_the_table_sorts_by_group_and_the_rows_without_a_group_come_last(self):
+        for name, group in (("zeta", "alpha"), ("beta", None), ("alpha", "zulu"), ("gamma", "alpha"),
+                            ("aardvark", None)):
+            projects.touch(self.repo(name, group, ["10-map.md"]), "")
+        _found, order = rows(self.amd("config", "--list")[1])
+        self.assertEqual(order, ["gamma", "zeta", "alpha", "aardvark", "beta"])
+        data = json.loads(self.amd("config", "--json")[1])
+        self.assertEqual([r["name"] for r in data["repositories"]], order)
+
+    def test_a_new_group_on_the_screen_moves_the_row_at_once(self):
+        for name, group in (("api", "shop"), ("web", "shop"), ("blog", None), ("lonely", None)):
+            projects.touch(self.repo(name, group, ["10-map.md"]), "")
+        fake = FakeScreen(typed="shop")
+        self.assertEqual(fake.names(), ["api", "web", "blog", "lonely"])
+        fake.repositories.cursor = 3
+        before = (self.base / "lonely" / "atlasmd.toml").read_text(encoding="utf-8")
+        fake.repositories.key(ord("g"))
+        self.assertEqual(fake.names(), ["api", "lonely", "web", "blog"])
+        self.assertEqual(fake.repositories.selected().name, "lonely")
+        self.assertEqual((self.base / "lonely" / "atlasmd.toml").read_text(encoding="utf-8"), before)  # s saves
+        fake.typed = ""
+        fake.repositories.key(ord("g"))
+        self.assertEqual(fake.names(), ["api", "web", "blog", "lonely"])
+        self.assertEqual(fake.repositories.selected().name, "lonely")
+
+
+class Remove(Base):
+    def files(self, root):
+        return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+    def test_remove_takes_the_repository_off_the_list_and_changes_no_file(self):
+        api = self.repo("api", "shop", ["10-map.md", "20-open-items.md"])
+        web = self.repo("web", "shop", ["10-map.md"])
+        projects.touch(api, "")
+        projects.touch(web, "")
+        before = self.files(api)
+        code, text = self.amd("config", "--remove", str(api))
+        self.assertEqual(code, 0, text)
+        self.assertIn("api left the list in", text)
+        self.assertIn("atlasmd.toml, docs/start/ and every other file stay", text)
+        self.assertIn("amd init, amd config or the next session start there puts it back on the list", text)
+        self.assertEqual([e["name"] for e in projects.load()], ["web"])
+        self.assertEqual(self.files(api), before)
+        self.assertNotIn("../api/", self.start(web) or "")  # the group lost its files with the entry
+        self.start(api)
+        self.assertEqual([e["name"] for e in projects.load()], ["api", "web"])
+
+    def test_remove_takes_a_name_and_refuses_one_that_is_not_on_the_list(self):
+        web = self.repo("web", None, [])
+        projects.touch(web, "")
+        code, text = self.amd("config", "--remove", "nothing")
+        self.assertEqual(code, 2)
+        self.assertIn("nothing is not on the list in", text)
+        code, text = self.amd("config", "--remove", "web")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(projects.load(), [])
+        self.assertTrue((web / "atlasmd.toml").is_file())
+
+    def test_r_on_a_row_asks_once_then_removes_it_from_the_list_only(self):
+        api = self.repo("api", "shop", ["10-map.md"])
+        web = self.repo("web", None, [])
+        projects.touch(api, "")
+        projects.touch(web, "")
+        before = self.files(api)
+        fake = FakeScreen(answer="n")
+        fake.repositories.key(ord("r"))
+        self.assertEqual([e["name"] for e in projects.load()], ["api", "web"])
+        self.assertTrue(any(s.startswith("Remove api from the list? No file in it changes.") for s in fake.said))
+        fake.answer = "y"
+        fake.repositories.key(ord("r"))
+        self.assertEqual([e["name"] for e in projects.load()], ["web"])
+        self.assertEqual(fake.names(), ["web"])
+        self.assertIn("api left the list in", fake.repositories.note)
+        self.assertEqual(self.files(api), before)
+
+
+class Words(Base):
+    def test_a_person_reads_start_files_as_text_and_never_inject(self):
+        api = self.repo("api", None, ["10-map.md"])
+        projects.touch(api, "")
+        self.amd("config", "--set", str(api), "start.inject", "false")
+        found, _order = rows(self.amd("config", "--list")[1])
+        self.assertIn("start files as text", cli.REPO_HEAD)
+        self.assertEqual(found["api"][4], "no")
+        self.assertFalse(any("inject" in head for head in cli.REPO_HEAD))
+        self.assertFalse(any("inject" in key + meaning for keys in screen.HELP.values() for key, meaning in keys))
+        self.assertEqual(screen.LABELS[("start", "inject")],
+                         "Give the start files as text when they fit in 10,000 characters")
+        line = next(x for x in config.defaults_text().splitlines() if x.startswith("inject = true"))
+        self.assertIn("as text when they fit in 10,000 characters", line.split("#", 1)[1])
+        self.assertNotIn("inject", line.split("#", 1)[1])
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        self.assertIn("whether the start files go in as text, when they fit, or always as a list", readme)
+
+
+class About(unittest.TestCase):
+    def test_the_about_station_has_what_atlasmd_does_the_setup_the_commands_the_skills_and_how_to_turn_it_off(self):
+        text = "\n".join(" ".join(seg[1] for seg in line if seg[1]) for line in screen.about_lines(400))
+        for sentence in cli.WHAT:
+            self.assertIn(sentence, text)
+            self.assertIn(sentence, setup.WELCOME)
+        for name, meaning in cli.COMMANDS:
+            self.assertIn(f"amd {name} {meaning}", text)
+        for name, meaning in cli.SKILLS:
+            self.assertIn(f"{name} {meaning}", text)
+        self.assertEqual(len(cli.SKILLS), len(list((REPO / "skills").glob("*/SKILL.md"))))
+        steps = [line for line in text.splitlines() if line[:3] in ("1. ", "2. ", "3. ")]
+        self.assertEqual([s.split()[1:3] for s in steps], [["amd", "init"], ["amd", "map"], ["amd", "check"]])
+        self.assertIn("/amd:init in a Claude Code session", steps[0])
+        for way in ("guard.mode = off, with m on a row", "delete atlasmd.toml", "ATLASMD=off claude",
+                    "r on a row of Repositories, or amd config --remove <path>"):
+            self.assertIn(way, text)
+
+
+class CommandOnPath(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = pathlib.Path(self.tmp.name).resolve() / "home"
+        self.home.mkdir()
+
+    def everything(self):
+        return sorted(p.relative_to(self.home).as_posix() for p in self.home.rglob("*"))
+
+    @unittest.skipIf(os.name == "nt", "the setup makes no link on Windows")
+    def test_put_amd_on_my_path_makes_the_folder_and_the_link_and_nothing_else(self):
+        answer, lines = setup.link_amd(self.home, path_value="/usr/bin", shell="/usr/bin/fish")
+        link = self.home / ".local" / "bin" / "amd"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.path.realpath(link), os.path.realpath(REPO / "bin" / "amd"))
+        self.assertEqual(self.everything(), [".local", ".local/bin", ".local/bin/amd"])
+        text = "\n".join(lines)
+        self.assertIn("    mkdir -p ~/.local/bin", text)
+        self.assertIn(f"    ln -s {REPO / 'bin' / 'amd'} ~/.local/bin/amd", text)
+        self.assertIn("~/.local/bin is not on the PATH of this shell. Add this line to ~/.config/fish/config.fish", text)
+        self.assertIn("    fish_add_path ~/.local/bin", text)
+        self.assertTrue(answer.startswith("~/.local/bin/amd links to"))
+        answer, lines = setup.link_amd(self.home, path_value=str(self.home / ".local" / "bin"), shell="/bin/zsh")
+        self.assertIn("already", answer)
+        self.assertIn("~/.local/bin is on the PATH of this shell", "\n".join(lines))
+        self.assertEqual(self.everything(), [".local", ".local/bin", ".local/bin/amd"])
+
+    @unittest.skipIf(os.name == "nt", "the setup makes no link on Windows")
+    def test_an_existing_amd_stays_and_not_now_gives_the_command(self):
+        self.assertEqual(setup.link_line(self.home),
+                         f"mkdir -p ~/.local/bin && ln -s {REPO / 'bin' / 'amd'} ~/.local/bin/amd")
+        mine = self.home / ".local" / "bin" / "amd"
+        mine.parent.mkdir(parents=True)
+        mine.write_text("mine\n", encoding="utf-8")
+        self.assertEqual(setup.link_line(self.home), f"ln -s {REPO / 'bin' / 'amd'} ~/.local/bin/amd")
+        answer, lines = setup.link_amd(self.home, path_value="", shell="/bin/bash")
+        self.assertIn("nothing changed", answer)
+        self.assertEqual(mine.read_text(encoding="utf-8"), "mine\n")
+        self.assertEqual(setup.start_file_line("/bin/bash"), ("~/.bashrc", 'export PATH="$HOME/.local/bin:$PATH"'))
+        self.assertEqual(setup.start_file_line("/bin/zsh")[0], "~/.zshrc")
+
+
+class OutsideARepository(Base):
+    def test_a_command_that_needs_atlasmd_toml_says_so_and_the_others_work(self):
+        empty = self.base / "empty"
+        empty.mkdir()
+        for args in (["check"], ["map"], ["area", "api"], ["area"], ["meter"], ["meter", "--json"]):
+            code, text = self.amd(*args, cwd=empty)
+            self.assertEqual((code, text.strip()), (1, cli.NO_REPOSITORY), args)
+        for args in ([], ["config", "--list"], ["config", "--json"], ["meter", "--list"], ["version"]):
+            code, text = self.amd(*args, cwd=empty)
+            self.assertEqual(code, 0, (args, text))
+            self.assertNotIn(cli.NO_REPOSITORY, text)
+        code, text = self.amd("setup", cwd=empty)
+        self.assertNotIn(cli.NO_REPOSITORY, text)
+        for args in (["scan"], ["init", "--dry-run"], ["status"], ["why"], ["end"]):
+            code, text = self.amd(*args, cwd=empty)  # a plain sentence, never a traceback
+            self.assertIn(code, (0, 1), (args, text))
+            self.assertNotIn("Traceback", text)
 
 
 if __name__ == "__main__":

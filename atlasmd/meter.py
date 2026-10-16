@@ -441,6 +441,22 @@ def render(root, found: list[dict], budget: int, color: bool = False) -> list[st
     return lines
 
 
+def render_all(found: list[dict]) -> list[str]:
+    """amd meter --list outside a repository: the sessions of every repository, the newest first."""
+    where = str(folder()).replace(str(pathlib.Path.home()), "~", 1)
+    lines = [f"atlasmd meter  every repository, from {where}", ""]
+    if not found:
+        return lines + ["No session is recorded yet. The hook records each session that starts in a repository "
+                        "with atlasmd.toml."]
+    lines += ["This folder has no atlasmd.toml above it, so amd meter --list shows the sessions of every repository, "
+              f"the newest first: {plural(len(found), 'session')}.", ""]
+    rows = [(pathlib.Path(r.get("root") or "").name or "none",) + history_cells(r) for r in found]
+    lines += ["  " + line for line in table(("repository",) + HISTORY_HEAD, rows, (False,) + RIGHT)]
+    lines += ["", "amd meter in a repository shows its newest session with bars. amd meter --compare <session> "
+                  "<session> compares two sessions."]
+    return lines
+
+
 # ---------------------------------------------------------------- the screen
 HELP = [("↑↓", "move"), ("enter", "pick two sessions"), ("c", "compare with the newest of the other kind"),
         ("q", "quit")]

@@ -1,13 +1,15 @@
 """amd config: the screen of your repositories, and of the settings and the Markdown files of each one.
 
-Three stations on a route. Repositories: a table of every repository in <data>/projects.toml. On a row,
-g, m, i and b change the group, guard.mode, start.inject and start.budget, and enter opens the row.
-The settings of one repository: the values of its atlasmd.toml, its [[area]] entries and your own
-settings, as in 0.2. The budget, the two inject values, the guard mode and your own settings change
-there. Files: the Markdown files of the repository as a tree. p adds a file to [private] files or
-removes it. tab and shift-tab go from station to station. s saves, q quits.
+Four stations on a route. About: what atlasmd does, how to set up a repository, the commands, the
+skills and the three ways to turn atlasmd off. Repositories: a table of every repository in
+<data>/projects.toml, sorted by group. On a row, g, m, i and b change the group, guard.mode, start.inject
+and start.budget, r removes the row from the list, and enter opens the row. The settings of one
+repository: the values of its atlasmd.toml, its [[area]] entries and your own settings. Files: the
+Markdown files of the repository as a tree. p adds a file to [private] files or removes it. tab and
+shift-tab go from station to station. s saves, q quits.
 """
 import os
+import textwrap
 from pathlib import Path
 
 from atlasmd import areas as areas_mod
@@ -25,7 +27,6 @@ CHOICES = {
 NUMBERS = {("start", "budget"): (1000, 1000, 10_000_000), ("you", "token_chars"): (0.1, 0.5, 100)}
 HINTS = {
     ("start", "budget"): "token limit for these files",
-    ("start", "inject"): {True: "Claude gets the text of the files", False: "Claude gets only a list of files"},
     ("start", "dir"): "its Markdown files, in name order",
     ("start", "files"): "if not empty, dir is not used",
     ("start", "also"): "Claude gets these after dir",
@@ -36,21 +37,25 @@ HINTS = {
                         "remind": "permit it and name the files",
                         "off": "do not look at edits"},
     ("guard", "bash"): "also look at Bash file writes",
-    ("agents", "inject"): {"map": "a subagent gets start.map",
-                           "start": "a subagent gets the files above",
-                           "none": "a subagent gets nothing"},
+    ("agents", "inject"): {"map": "the file in start.map",
+                           "start": "the same start files as a session",
+                           "none": "nothing"},
     ("you", "offer_setup"): "offer /amd:init without atlasmd.toml",
     ("you", "token_chars"): "characters per estimated token",
 }
-LABELS = {("you", "offer_setup"): "offer setup", ("you", "token_chars"): "token chars"}
+LABELS = {("you", "offer_setup"): "offer setup", ("you", "token_chars"): "token chars",
+          ("start", "inject"): "Give the start files as text when they fit in 10,000 characters",
+          ("agents", "inject"): "a subagent gets"}
 START_KEYS = ("budget", "inject", "dir", "files", "also", "state", "map", "line")
+SENTENCE = 24  # a label longer than this is a sentence
 
 HELP = {
-    0: [("↑↓", "move"), ("enter", "open"), ("g", "group"), ("m", "guard.mode"), ("i", "start.inject"),
-        ("b", "start.budget"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
-    1: [("↑↓", "move"), ("←→", "change"), ("enter", "change or type"), ("tab", "next station"), ("s", "save"),
+    0: [("↑↓", "scroll"), ("tab", "next station"), ("q", "quit")],
+    1: [("↑↓", "move"), ("enter", "open"), ("g", "group"), ("m", "guard.mode"), ("i", "start files as text"),
+        ("b", "start.budget"), ("r", "remove from the list"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
+    2: [("↑↓", "move"), ("←→", "change"), ("enter", "change or type"), ("tab", "next station"), ("s", "save"),
         ("q", "quit")],
-    2: [("↑↓", "move"), ("p", "private or not"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
+    3: [("↑↓", "move"), ("p", "private or not"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
 }
 TAB, BACKTAB, ESCAPE = 9, 353, 27
 
@@ -71,11 +76,16 @@ def show(value):
 class Repo:
     """One repository of the list: its atlasmd.toml, its values as the screen shows them, and as saved."""
 
-    def __init__(self, path, name=None):
+    def __init__(self, path, name=None, group=""):
         self.path = Path(path)
         self.name = name or self.path.name
+        self.list_group = group
         self.info = None
         self.load()
+
+    def group(self):
+        """The group as the screen shows it, before a save."""
+        return self.values.get(("", "group"), self.list_group) if self.cfg else self.list_group
 
     def load(self):
         self.cfg, self.error = None, None
@@ -120,7 +130,7 @@ class Repo:
 
 
 class Mine:
-    """Your own settings, for every project."""
+    """Your own settings, for every repository."""
 
     def __init__(self):
         self.values = {"offer_setup": bool(cli.personal_value("offer_setup")),
@@ -138,17 +148,111 @@ class Mine:
         return len(changed)
 
 
-# ---------------------------------------------------------------- station 1: the repositories
+def wrap(text, width):
+    """The lines of a text for a width. A path or a word with hyphens stays in one piece."""
+    return textwrap.wrap(text, max(20, width), break_on_hyphens=False, break_long_words=False)
+
+
+# ---------------------------------------------------------------- station 1: about
+def about_lines(width):
+    """The About station, laid out for a width: a list of lines, each a list of (x, text, style) with the
+    styles heading, key and plain. An empty list is a blank line."""
+    lines = []
+
+    def heading(text):
+        if lines:
+            lines.append([])
+        lines.append([(0, text, "heading")])
+
+    def para(text, bullet=""):
+        for i, line in enumerate(wrap(text, width - len(bullet))):
+            lines.append([(0, (bullet if i == 0 else " " * len(bullet)) + line, "plain")])
+
+    def pairs(items):
+        kw = max(len(k) for k, _ in items if len(k) <= 30)  # a longer command stands on its own line, as amd prints it
+        for key, text in items:
+            if len(key) > kw:
+                lines.append([(0, key, "key")])
+                key = ""
+            for i, line in enumerate(wrap(text, width - kw - 2) or [""]):
+                lines.append([(0, key if i == 0 else "", "key"), (kw + 2, line, "plain")])
+
+    heading("What atlasmd does")
+    for sentence in cli.WHAT:
+        para(sentence, "· ")
+    heading("Set up a repository")
+    para("amd init in the root of the repository, or /amd:init in a Claude Code session. amd init writes "
+         "atlasmd.toml and the four files of docs/start/. /amd:init also fills them.", "1. ")
+    para("amd map writes the list of every Markdown file and of the [[area]] entries into the map file.", "2. ")
+    para("amd check reports what to fix.", "3. ")
+    heading("The commands, as amd prints them")
+    pairs([("amd " + name, text) for name, text in cli.COMMANDS])
+    lines.append([])
+    pairs([("amd " + name if name else "", text) for name, text in cli.OPTIONS])
+    heading(f"The {len(cli.SKILLS)} skills, in a Claude Code session")
+    pairs(cli.SKILLS)
+    heading("Turn atlasmd off")
+    para("guard.mode = off, with m on a row of Repositories: the hook refuses no edit in that repository. Claude "
+         "still gets the start files there. To stop them too, delete atlasmd.toml in that repository.", "· ")
+    para("ATLASMD=off claude: one session without atlasmd. The hook gives no start files, refuses no edit and "
+         "gives no reminder. The meter records the session, marked off.", "· ")
+    para(f"r on a row of Repositories, or amd config --remove <path>: the repository leaves the list in "
+         f"{cli.tilde(projects.path())}, and the other repositories of its group stop getting its docs/start/. "
+         "Nothing in the repository changes. amd init, amd config or the next session start there puts it back "
+         "on the list.", "· ")
+    return lines
+
+
+class About:
+    def __init__(self, screen):
+        self.s = screen
+        self.scroll = 0
+
+    def key(self, key):
+        curses = self.s.curses
+        if key in (curses.KEY_UP, ord("k")):
+            self.scroll -= 1
+        elif key in (curses.KEY_DOWN, ord("j")):
+            self.scroll += 1
+        elif key == curses.KEY_PPAGE:
+            self.scroll -= 10
+        elif key == curses.KEY_NPAGE:
+            self.scroll += 10
+
+    def draw(self, top):
+        s = self.s
+        h, w = s.scr.getmaxyx()
+        lines = about_lines(min(76, w - 8))
+        bottom = len(tui.footer_rows(HELP[0], w)) + 2
+        visible = max(1, h - top - bottom)
+        self.scroll = max(0, min(self.scroll, max(0, len(lines) - visible)))
+        y = top
+        for line in lines[self.scroll:self.scroll + visible]:
+            for x, text, style in line:
+                if style == "heading":
+                    s.put(y, 2, text, s.accent())
+                else:
+                    s.put(y, 4 + x, text, s.curses.A_BOLD if style == "key" else 0)
+            y += 1
+        if self.scroll > 0:
+            s.put(top - 1, max(2, w - 10), "↑ more", s.dim())
+        if self.scroll + visible < len(lines):
+            s.put(h - bottom, max(2, w - 10), "↓ more", s.dim())
+
+
+# ---------------------------------------------------------------- station 2: the repositories
 class Repositories:
     def __init__(self, screen):
         self.s = screen
         self.cursor = 0
         self.scroll = 0
+        self.note = ""  # the sentence after a removal, until the next key
 
     def columns(self, cells, width):
-        """The indexes of the columns that fit the width. The path goes first, then the counts."""
+        """The indexes of the columns that fit the width. The path goes first, then the Markdown files and the
+        settings. The start files and their tokens go last."""
         shown = list(range(len(cli.REPO_HEAD)))
-        for drop in (1, 8, 7, 6):
+        for drop in (1, 8, 5, 4, 3, 7, 6):
             widths = [max(len(str(r[i])) for r in cells) for i in shown]
             if sum(widths) + 2 * (len(shown) - 1) <= width:
                 break
@@ -160,8 +264,10 @@ class Repositories:
         h, w = s.scr.getmaxyx()
         repos = s.repos
         if not repos:
-            s.put(top, 4, tui.fit("atlasmd knows no repository yet. amd init, amd config and the hook at a session start "
-                                  "add the repository where they run.", w - 7), s.dim())
+            text = ("atlasmd knows no repository yet. amd init, amd config and the hook at a session start add the "
+                    "repository where they run.")
+            for i, line in enumerate(wrap(text, w - 7) + ([""] + wrap(self.note, w - 7) if self.note else [])):
+                s.put(top + i, 4, line, s.dim() if i < 2 else 0)
             return
         rows = [cli.repository_cells(r.row(), r.values) for r in repos]
         cells = [cli.REPO_HEAD] + rows
@@ -181,8 +287,14 @@ class Repositories:
                 x += widths[i] + 2
 
         put_row(top, cli.REPO_HEAD, s.dim())
-        bottom = len(tui.footer_rows(HELP[0], w)) + 2
-        visible = max(1, h - top - 1 - bottom - 2)
+        notes = [f"From {cli.tilde(projects.path())}. Repositories with the same group share their docs/start/ "
+                 "at a session's start."]
+        notes += [cli.nothing_sentence(r.row()) for r in repos if not r.error and not r.row()["start_files"]]
+        under = [(line, s.dim()) for text in notes for line in wrap(text, w - 7)]
+        if self.note:
+            under += [("", 0)] + [(line, 0) for line in wrap(self.note, w - 7)]
+        bottom = len(tui.footer_rows(HELP[1], w)) + 2
+        visible = max(1, h - top - 1 - bottom - 1 - len(under))
         self.cursor = max(0, min(self.cursor, len(repos) - 1))
         if self.cursor < self.scroll:
             self.scroll = self.cursor
@@ -205,15 +317,34 @@ class Repositories:
         if self.scroll + visible < len(repos):
             s.put(y, max(2, w - 10), "↓ more", s.dim())
         y += 1
-        s.put(y, 4, tui.fit(f"From {cli.tilde(projects.path())}. Repositories with the same group share their "
-                            "docs/start/ at a session's start.", w - 7), s.dim())
+        for line, attr in under:
+            s.put(y, 4, line, attr)
+            y += 1
 
     def selected(self):
         return self.s.repos[self.cursor] if self.s.repos else None
 
+    def remove(self, repo):
+        """r: remove the repository from the list after one question. No file of the repository changes."""
+        s = self.s
+        lost = " Its changes that are not saved are lost." if repo.dirty() else ""
+        answer = s.ask_key(f"Remove {repo.name} from the list? No file in it changes.{lost}  y removes, another key "
+                           "stays", HELP[1])
+        s.say("")
+        if answer not in (ord("y"), ord("Y")):
+            return
+        try:
+            projects.remove(repo.path)
+        except OSError as exc:
+            s.say(f"{repo.name} stays on the list: {exc}", problem=True)
+            return
+        s.drop(repo)
+        self.note = cli.removed_text(repo.name, repo.path)
+
     def key(self, key):
         s, curses = self.s, self.s.curses
         repo = self.selected()
+        self.note = ""
         if key in (curses.KEY_UP, ord("k")):
             self.cursor = max(0, self.cursor - 1)
         elif key in (curses.KEY_DOWN, ord("j")):
@@ -221,7 +352,9 @@ class Repositories:
         elif repo is None:
             return
         elif key in (curses.KEY_ENTER, 10, 13, ord(" ")):
-            s.open(self.cursor, 1)
+            s.open(self.cursor, 2)
+        elif key in (ord("r"), ord("R")):
+            self.remove(repo)
         elif key in (ord("g"), ord("m"), ord("i"), ord("b")) and repo.error:
             s.say(f"{repo.name}: {repo.error}. This screen changes a repository with a valid atlasmd.toml.", problem=True)
         elif key == ord("g"):
@@ -233,6 +366,7 @@ class Repositories:
                       problem=True)
                 return
             repo.values[("", "group")] = text
+            s.sort()  # the row moves to its group at once
             s.say(f"{repo.name}: group = {text or 'none'}   s saves")
         elif key == ord("m"):
             modes = list(config.GUARD_MODES)
@@ -241,7 +375,7 @@ class Repositories:
             s.say(f"{repo.name}: guard.mode = {repo.values[('guard', 'mode')]}   s saves")
         elif key == ord("i"):
             repo.values[("start", "inject")] = not repo.values[("start", "inject")]
-            s.say(f"{repo.name}: start.inject = {'true' if repo.values[('start', 'inject')] else 'false'}   s saves")
+            s.say(f"{repo.name}: start files as text = {'yes' if repo.values[('start', 'inject')] else 'no'}   s saves")
         elif key == ord("b"):
             text = s.ask_line(f"start.budget of {repo.name}, in tokens: ")
             if not text:
@@ -255,7 +389,7 @@ class Repositories:
             s.say(f"{repo.name}: start.budget = {value:,}   s saves")
 
 
-# ---------------------------------------------------------------- station 2: the settings of one repository
+# ---------------------------------------------------------------- station 3: the settings of one repository
 class Settings:
     def __init__(self, screen, repo):
         self.s = screen
@@ -310,7 +444,7 @@ class Settings:
         else:
             out.append(("note", None, f"{self.repo.name}: {self.repo.error}."))
             out.append(("blank", None, None))
-        out.append(("heading", None, "your own settings, for every project"))
+        out.append(("heading", None, "your own settings, for every repository"))
         out.append(("value", ("you", "offer_setup"), None))
         out.append(("value", ("you", "token_chars"), None))
         return out
@@ -367,7 +501,7 @@ class Settings:
                 value = round(value, 2)
             if 0 < value <= top:
                 self.set(ident, value)
-        s.say(f"{self.label(ident)} = {show(self.get(ident))}   s saves")
+        s.say(f"{self.label(ident)}{': ' if len(self.label(ident)) > SENTENCE else ' = '}{show(self.get(ident))}   s saves")
 
     def type_value(self):
         s = self.s
@@ -412,7 +546,7 @@ class Settings:
         sel = self.selectable()
         self.cursor = max(0, min(self.cursor, len(sel) - 1)) if sel else 0
         current = sel[self.cursor] if sel else None
-        bottom = len(tui.footer_rows(HELP[1], w)) + 2
+        bottom = len(tui.footer_rows(HELP[2], w)) + 2
         visible = max(1, h - top - bottom)
         at = next((i for i, r in enumerate(rows) if r[1] == current and r[0] in ("value", "area")), 0)
         if at < self.scroll + 1:
@@ -422,7 +556,7 @@ class Settings:
         self.scroll = max(0, min(self.scroll, max(0, len(rows) - visible)))
         names = [a.name for a in self.cfg.areas] if self.cfg else []
         area_now = self.current_area()
-        label_w = 14
+        label_w = 17
         y = top
         for kind, ident, extra in rows[self.scroll:self.scroll + visible]:
             if kind == "heading":
@@ -440,10 +574,18 @@ class Settings:
                 chosen = ident == current
                 editable = self.editable(ident)
                 s.put(y, 2, "›" if chosen else " ", s.accent())
-                s.put(y, 4, self.label(ident), curses.A_BOLD if chosen else (0 if editable else s.dim()))
+                label = self.label(ident)
+                sentence = len(label) > SENTENCE  # the value comes after a sentence, and there is no hint
+                if sentence:
+                    label = tui.fit(label, max(4, w - 16))
+                s.put(y, 4, label, curses.A_BOLD if chosen else (0 if editable else s.dim()))
                 value = show(self.get(ident))
                 vw = 24 if w >= 72 else 12
                 attr = s.accent() if self.get(ident) != self.saved(ident) else (curses.A_BOLD if editable else s.dim())
+                if sentence:
+                    s.put(y, 4 + len(label) + 2, tui.fit(value, vw), attr)
+                    y += 1
+                    continue
                 s.put(y, 4 + label_w, tui.fit(value, vw), attr)
                 x = 4 + label_w + vw + 2
                 hint = self.hint(ident)
@@ -469,7 +611,7 @@ class Settings:
             s.put(h - bottom, max(2, w - 10), "↓ more", s.dim())
 
 
-# ---------------------------------------------------------------- station 3: the Markdown files of one repository
+# ---------------------------------------------------------------- station 4: the Markdown files of one repository
 class Files:
     NOTE = ("p adds the file to [private] files in atlasmd.toml and to .git/info/exclude, so git does not commit "
             "it. p on a private file removes it from both.")
@@ -530,7 +672,7 @@ class Files:
         if not files:
             s.put(top + 1, 4, "This repository has no Markdown files.", s.dim())
             return
-        bottom = len(tui.footer_rows(HELP[2], w)) + 2
+        bottom = len(tui.footer_rows(HELP[3], w)) + 2
         visible = max(1, h - top - 1 - bottom - 2)
         self.cursor = max(0, min(self.cursor, len(files) - 1))
         at = files[self.cursor]
@@ -566,20 +708,22 @@ class Config(tui.Page):
         super().__init__(stdscr)
         cli.register_here(cwd)
         here = config.find(cwd)
-        self.repos = [Repo(e["path"], e["name"]) for e in projects.load()]
+        self.repos = [Repo(e["path"], e["name"], e["group"]) for e in projects.load()]
         self.mine = Mine()
-        self.station = 0
+        self.station = 1
+        self.about = About(self)
         self.repositories = Repositories(self)
         self.views = {}
+        sort_repos(self.repos)
         if here is not None:
             own = config.norm(here.parent)
             found = next((i for i, r in enumerate(self.repos) if config.norm(r.path) == own), None)
             if found is None:  # an atlasmd.toml that cannot be read is not in the list
                 self.repos.append(Repo(here.parent))
-                self.repos.sort(key=lambda r: (r.name.lower(), str(r.path)))
+                sort_repos(self.repos)
                 found = next(i for i, r in enumerate(self.repos) if config.norm(r.path) == own)
             self.repositories.cursor = found
-            self.station = 1
+            self.station = 2
             if self.repos[found].error:
                 self.say(f"{self.repos[found].name}: {self.repos[found].error}", problem=True)
 
@@ -587,11 +731,24 @@ class Config(tui.Page):
     def repo(self):
         return self.repositories.selected()
 
+    def sort(self):
+        """Sort the rows by group and name. The cursor stays on its repository."""
+        chosen = self.repo()
+        sort_repos(self.repos)
+        if chosen is not None:
+            self.repositories.cursor = self.repos.index(chosen)
+
+    def drop(self, repo):
+        """Take a repository off the screen, after its removal from the list."""
+        self.repos.remove(repo)
+        self.views = {k: v for k, v in self.views.items() if k[1] != str(repo.path)}
+        self.repositories.cursor = max(0, min(self.repositories.cursor, len(self.repos) - 1))
+
     def view(self, station):
         repo = self.repo()
         key = (station, str(repo.path))
         if key not in self.views:
-            self.views[key] = Settings(self, repo) if station == 1 else Files(self, repo)
+            self.views[key] = Settings(self, repo) if station == 2 else Files(self, repo)
         return self.views[key]
 
     def open(self, index, station):
@@ -601,7 +758,7 @@ class Config(tui.Page):
 
     def names(self):
         repo = self.repo()
-        return ["Repositories"] + ([repo.name, "Files"] if repo else [])
+        return ["About", "Repositories"] + ([repo.name, "Files"] if repo else [])
 
     def ask_line(self, prompt):
         h, w = self.scr.getmaxyx()
@@ -622,6 +779,8 @@ class Config(tui.Page):
                     self.say(f"{repo.name}: {exc}", problem=True)
                     return False
         count += self.mine.save()
+        for repo in self.repos:  # a new group changes the start files of the other rows too
+            repo.info = None
         self.say("Saved. The hook uses the new values from the next tool call." if count else "Nothing changed.")
         return True
 
@@ -641,10 +800,12 @@ class Config(tui.Page):
     def draw(self):
         self.scr.erase()
         repo = self.repo()
-        right = cli.tilde(repo.path) if repo and self.station else cli.tilde(projects.path())
+        right = cli.tilde(repo.path) if repo and self.station >= 2 else cli.tilde(projects.path())
         self.header(right + ("   not saved" if self.dirty() else ""))
         self.draw_route(2, self.names(), self.station)
         if self.station == 0:
+            self.about.draw(5)
+        elif self.station == 1:
             self.repositories.draw(5)
         else:
             self.view(self.station).draw(5)
@@ -666,12 +827,19 @@ class Config(tui.Page):
                 self.save()
             elif key in (TAB, getattr(curses, "KEY_BTAB", BACKTAB), ESCAPE):
                 step = 1 if key == TAB else -1
-                self.station = 0 if key == ESCAPE else (self.station + step) % stations
+                self.station = 1 if key == ESCAPE else (self.station + step) % stations
                 self.say("")
             elif self.station == 0:
+                self.about.key(key)
+            elif self.station == 1:
                 self.repositories.key(key)
             else:
                 self.view(self.station).key(key)
+
+
+def sort_repos(repos):
+    """The order of the table: by group name, the repositories without a group last, by name inside a group."""
+    repos.sort(key=lambda r: cli.repository_order(r.name, r.group(), r.path))
 
 
 def run(cwd=None):

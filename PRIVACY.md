@@ -62,6 +62,10 @@ All files are under `~/.claude/plugins/data/amd/`, or under the folder that
 
 You own these files. To remove all of them, delete the folder.
 
+`amd setup` makes one more file, outside that folder, only when you pick "Put amd on my PATH
+now": the link `~/.local/bin/amd` to `bin/amd` of the plugin, and the folder `~/.local/bin`
+when it is missing. The link holds no data.
+
 ## What it sends
 
 Nothing. The plugin makes no network calls. It contacts no service, no telemetry
