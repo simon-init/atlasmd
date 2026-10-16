@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import pathlib
 import re
+import tomllib
 from dataclasses import dataclass, field
 
 CONFIG_NAME = "atlasmd.toml"
@@ -94,12 +95,25 @@ def find(path: str | os.PathLike) -> pathlib.Path | None:
 
 
 def personal() -> dict:
-    """The settings of the person, not of the project: from the environment of the hook."""
-    value = os.environ.get("CLAUDE_PLUGIN_OPTION_OFFER_SETUP")
-    offer = True if value is None else value.strip().lower() not in ("false", "0", "no", "off", "")
+    """The settings of the person, not of the project: settings.toml under the data folder, which
+    `amd set` writes, and the environment of the hook, which wins for offer_setup."""
     data = os.environ.get("CLAUDE_PLUGIN_DATA")
     data_dir = pathlib.Path(data) if data else pathlib.Path.home() / ".claude" / "plugins" / "data" / "amd"
-    return {"offer_setup": offer, "data_dir": data_dir, "token_chars": 2.5}
+    offer, token_chars = True, 2.5
+    try:
+        with open(data_dir / "settings.toml", "rb") as handle:
+            stored = tomllib.load(handle)
+        if isinstance(stored.get("offer_setup"), bool):
+            offer = stored["offer_setup"]
+        number = stored.get("token_chars")
+        if isinstance(number, (int, float)) and not isinstance(number, bool) and number > 0:
+            token_chars = float(number)
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    value = os.environ.get("CLAUDE_PLUGIN_OPTION_OFFER_SETUP")
+    if value is not None:
+        offer = value.strip().lower() not in ("false", "0", "no", "off", "")
+    return {"offer_setup": offer, "data_dir": data_dir, "token_chars": token_chars}
 
 
 # --- loading -----------------------------------------------------------------------------------
