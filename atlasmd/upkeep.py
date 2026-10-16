@@ -144,11 +144,13 @@ _SPAN = re.compile(r"`([^`\n]+)`")
 
 
 def pointers(text: str) -> list[str]:
-    """The paths in backticks of a text: a string with a / or ending in .md, without spaces and without a URL."""
+    """The paths in backticks of a text: a string with a / or ending in .md, without spaces, without a URL,
+    and not an absolute path, because /opt/... or ~/... names a machine and not this repository."""
     found = []
     for m in _SPAN.finditer(text):
         span = m.group(1).strip().split("#", 1)[0]
         if (not span or any(c.isspace() for c in span) or "://" in span or any(c in span for c in "<>*{}$")
+                or span.startswith(("/", "~", "\\"))  # a path of a machine, not of this repository
                 or not ("/" in span or span.lower().endswith(".md"))):
             continue
         if span not in found:
