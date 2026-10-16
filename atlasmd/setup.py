@@ -15,39 +15,50 @@ STEPS = ["Welcome", "How it works", "You", "This project", "Done"]
 HELP = [("↑↓", "move"), ("enter", "pick"), ("←", "back"), ("q", "quit")]
 
 WELCOME = (
-    "atlasmd is a hook inside Claude Code. It runs at the start of a session, before every edit, and "
-    "after every compaction.\n\n"
-    "At the start of a session, it gives Claude the Markdown files in docs/start/ of your project, "
-    "and nothing else.\n\n"
-    "Before an edit, when the file is in a folder that atlasmd.toml lists, it refuses the edit until "
-    "Claude has read the files listed for that folder, for example the folder's README and the "
-    "decisions behind it.\n\n"
-    "After a compaction, it writes the date, the project folder and the size of the summary to "
-    "compacts.log, and it makes Claude read the listed files again before its next edit.\n\n"
+    "atlasmd is a hook inside Claude Code. It runs at the start of a session, before every edit, "
+    "and after every compaction.\n\n"
+    "## At the start of a session\n"
+    "It gives Claude the Markdown files in docs/start/ of your project, and nothing else. Those files "
+    "say what the project is, what is open, and how to work here. So a new session knows the project "
+    "without reading the whole repository, and the start costs a few thousand tokens instead of "
+    "hundreds of thousands.\n\n"
+    "## Before an edit\n"
+    "When the file is in a folder that atlasmd.toml lists, it refuses the edit until Claude has read "
+    "the files listed for that folder, for example the folder's README. The README says how that part "
+    "works and why. For example: the README of api/ says that every time is stored as UTC. An agent "
+    "that did not read it writes local time, and the bug is in the data for weeks.\n\n"
+    "## After a compaction\n"
+    "A compaction removes the files Claude read from its context. So atlasmd makes Claude read the "
+    "listed files again before its next edit, and it writes the date, the project folder and the size "
+    "of the summary to compacts.log, so you can see what each compaction costs.\n\n"
     "This setup has five steps. Every answer can be changed later with amd config or amd set."
 )
 HOW = (
     "## At the start of a session\n"
-    "Claude Code runs the hook. The hook reads the Markdown files in docs/start/ of the project, in "
-    "name order, and hands them to Claude. A hook can hand over at most 10,000 characters. When the "
-    "files are shorter, Claude gets their text. When they are longer, Claude gets the list of the "
-    "files and reads each one with one Read. The same happens after every compaction, so a "
-    "compacted session starts the same way as a fresh one.\n\n"
+    "- The hook reads the Markdown files in docs/start/, in name order, and hands them to Claude.\n"
+    "- A hook can hand over at most 10,000 characters.\n"
+    "- Shorter: Claude gets the text. Longer: Claude gets the list and reads each file, one Read each.\n"
+    "- After a compaction the same happens, so a compacted session starts like a fresh one.\n\n"
     "## Before an edit\n"
-    "atlasmd.toml lists folders, and for each folder the files to read before a change there, for "
-    "example services/scrubber/README.md and the decisions it depends on. When Claude is about to "
-    "change a file in one of those folders, the hook looks up which of the listed files Claude has "
-    "read in this session. If one is missing, the hook refuses the edit and names the files. Claude "
-    "reads them and makes the edit again.\n\n"
+    "- atlasmd.toml lists folders. For each folder it lists the files to read before a change there.\n"
+    "- Claude is about to change a file in a listed folder. The hook looks up which listed files "
+    "Claude read in this session.\n"
+    "- One is missing: the hook refuses the edit and names the files. Claude reads them and edits again.\n\n"
     "## After a compaction\n"
-    "The hook keeps the list of the files each session has read, in ~/.claude/plugins/data/amd/ledgers/. "
-    "A compaction removes those files from Claude's context, so the hook empties the list, and the "
-    "next edit in a listed folder reads the files again. The hook also appends one line to "
-    "compacts.log: the date and time, the project folder, whether the compaction was manual or "
-    "automatic, and the size of the summary in characters."
+    "- The hook keeps the list of files each session read, in ~/.claude/plugins/data/amd/ledgers/.\n"
+    "- A compaction empties that list, so the next edit in a listed folder reads the files again.\n"
+    "- One line goes to compacts.log: date and time, project folder, manual or automatic, and the "
+    "size of the summary."
 )
-YOU = ("Two settings of your own, for every project on this computer. When the plugin's option "
-       "offer_setup is set in Claude Code, that value wins over the setting here.")
+YOU = (
+    "Two settings that apply to every project on this computer.\n\n"
+    "1. A project without atlasmd.toml. At the start of a session there, should Claude say once: "
+    "run /amd:init to set up atlasmd here? Yes or no.\n\n"
+    "2. Characters per token. atlasmd shows sizes in tokens, and it counts one token for every "
+    "2.5 characters. That fits English text and code. A larger number gives smaller sizes.\n\n"
+    "If you set the option offer_setup in Claude Code with /plugin configure, that value wins over "
+    "the first setting here."
+)
 
 
 def short(path):
@@ -91,7 +102,7 @@ class Setup(tui.Page):
             return YOU, [
                 ("Suggest /amd:init", "yes" if self.offer else "no",
                  "in a project without atlasmd.toml", self.toggle_offer),
-                ("Characters per token", f"{self.chars:g}", "atlasmd estimates tokens with it", self.type_chars),
+                ("Characters per token, for the sizes", f"{self.chars:g}", "Enter types a number", self.type_chars),
                 ("Continue", "", "", self.next),
             ]
         if self.step == 3:
