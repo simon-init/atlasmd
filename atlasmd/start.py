@@ -81,6 +81,26 @@ def compose(cfg: Config) -> Composed:
     if cfg.start.inject and not over_budget and not over_limit:
         return Composed(text=full, tokens=tokens, over_budget=False, files=measured)
 
+    if cfg.start.inject and not over_budget and over_limit:
+        # The content of the first files, as far as the limit lets, then the list of the rest.
+        body, given = head, []
+        for (path, n), text in zip(measured, contents):
+            block = f"\n\n## {areas.rel(cfg, path)}\n\n{text}"
+            room = CONTEXT_LIMIT - 400 - 120 * (len(measured) - len(given) - 1)
+            if len(body) + len(block) > room:
+                break
+            body += block
+            given.append(path)
+        rest = [(path, n) for path, n in measured if path not in given]
+        if given and rest:
+            lines = [body, "", "The files above are in this context. Read the rest now, in this order:"]
+            lines += [f"- {areas.rel(cfg, path)}, about {n} tokens" for path, n in rest]
+            lines.append(f"The whole start reading has {len(full)} characters, and Claude Code takes at most "
+                         f"{CONTEXT_LIMIT} characters from a hook.")
+            text = "\n".join(lines)
+            if len(text) <= CONTEXT_LIMIT:
+                return Composed(text=text, tokens=tokens, over_budget=False, files=measured, over_limit=True)
+
     lines = [head, "Read these files now, in this order:"]
     lines += [f"- {areas.rel(cfg, path)}, about {n} tokens" for path, n in measured]
     if over_budget:

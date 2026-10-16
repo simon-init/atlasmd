@@ -15,7 +15,8 @@ hooks in Python, with no dependencies, and a command line, `amd`.
    start and after each compaction, the hook gives these files to the session, within
    a budget of tokens. When the files fit in the 10,000 characters that Claude Code
    takes from a hook, the hook gives their content. When they do not fit, it gives the
-   list of the files, and the session reads each file. So a fresh session and a
+   content of the first files as far as the limit lets, and the list of the rest, and
+   the session reads each file of the list. So a fresh session and a
    compacted session start with the same small reading.
 2. **The guard.** A project names its areas. Each area has code paths and a pack: the
    Markdown files to read before a change in the area. The hook refuses an Edit or a

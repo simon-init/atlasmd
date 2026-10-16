@@ -163,7 +163,9 @@ class StartReading(HookCase):
     def test_above_the_limit_of_claude_code_injects_the_list(self):
         write(self.root / "docs/start/15-long.md", "word " * 3000)
         text = self.context(self.start())
-        self.assertIn("Read these files now, in this order:", text)
+        self.assertIn("Read the rest now, in this order:", text)
+        self.assertIn("The first file of the start reading.", text)
+        self.assertIn("docs/start/15-long.md, about", text)
         self.assertIn("Claude Code takes at most 10000 characters from a hook", text)
         self.assertLess(len(text), 10000)
 

@@ -467,6 +467,13 @@ def unread(cfg, md):
     return result
 
 
+def map_outside(cfg):
+    """True when start.map points at a file outside this project, such as another repository's map."""
+    root = Path(cfg.root).resolve()
+    target = (Path(cfg.root) / cfg.start.map).resolve()
+    return root != target and root not in target.parents
+
+
 def run_check(cfg):
     root = cfg.root
     findings = []
@@ -480,9 +487,9 @@ def run_check(cfg):
               "chars": chars, "char_limit": start.CONTEXT_LIMIT, "over_limit": bool(composed.over_limit),
               "inject": cfg.start.inject,
               "files": [{"path": rel(root, p), "tokens": t} for p, t in composed.files]}
-    if not composed.files:
-        add("start", f"the start reading has no files: {cfg.start.dir}/ is empty or does not exist. Run amd init.",
-            cfg.start.dir)
+    if not composed.files and not cfg.start.also:
+        add("start", f"the start reading has no files: {cfg.start.dir}/ is empty or does not exist. "
+                     "Run amd init, or point [start] also at another project's start folder.", cfg.start.dir)
     if composed.over_budget:
         add("budget", f"the start reading has about {number(composed.tokens)} tokens, over the budget of "
                       f"{number(cfg.start.budget)}")
@@ -503,7 +510,9 @@ def run_check(cfg):
     for f in unread(cfg, md):
         add("unread", f"{f}: no folder rule, no pack and no start reading covers this file", f)
     map_file = root / cfg.start.map
-    if not map_file.is_file():
+    if map_outside(cfg):
+        pass  # the map belongs to another project, which checks it
+    elif not map_file.is_file():
         add("map", f"the map {cfg.start.map} does not exist. Run amd init.", cfg.start.map)
     else:
         for block in mapping.stale(cfg, files):
@@ -544,7 +553,9 @@ def cmd_check(cwd, args):
         if section == "start reading":
             ok = not hits
             out(f"{mark(ok)} {section.ljust(label_w)}  about {number(b['tokens'])} of {number(b['budget'])} tokens "
-                f"in {len(b['files'])} files")
+                f"in {len(b['files'])} files" + (", of which the files of [start] also" if cfg.start.also else ""))
+            if not b["files"] and not hits:
+                out("    This project gives no start reading of its own.")
             if b["files"]:
                 w = max(len(f["path"]) for f in b["files"])
                 tw = max(len(number(f["tokens"])) for f in b["files"])
@@ -563,6 +574,8 @@ def cmd_check(cwd, args):
         if not hits:
             if section == "packs" and not cfg.areas:
                 out(f"{mark(True)} {section.ljust(label_w)}  no areas yet")
+            elif section == "map" and map_outside(cfg):
+                out(f"{mark(True)} {section.ljust(label_w)}  the map is in another project, {cfg.start.map}, which checks it")
             else:
                 out(f"{mark(True)} {section.ljust(label_w)}  {GOOD[section]}")
         for f in hits:
@@ -577,6 +590,8 @@ def cmd_check(cwd, args):
 def cmd_map(cwd, args):
     parse(args)
     cfg = load_config(cwd)
+    if map_outside(cfg):
+        raise Problem(f"The map of this project is {cfg.start.map}, in another project. Run amd map there.")
     files = scan.all_files(cfg.root)
     result = mapping.write(cfg, files)
     md = [f for f in scan.markdown_files(cfg.root, files)]

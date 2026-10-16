@@ -1,5 +1,14 @@
 # Changes
 
+## 0.1.1
+
+2026-10-16.
+
+- The start reading over the limit of a hook gives the content of the first files as far as the limit lets, and the list of the rest.
+- A map in another project, as with `[start] also`, is left to that project: `amd check` skips it and `amd map` refuses to write it.
+- A project with no start reading of its own and no `also` still gets the finding; one with `also` does not.
+- The hook reads the personal settings file that `amd set` writes.
+
 ## 0.1.0
 
 2026-10-16

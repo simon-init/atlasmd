@@ -7,7 +7,7 @@
       "name": "amd",
       "source": "./",
       "description": "Keeps a project's Markdown small at the start of a session, and makes an agent read an area's guide before it changes the area. Saves tokens on every compact.",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
