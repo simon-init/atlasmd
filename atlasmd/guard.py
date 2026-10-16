@@ -324,8 +324,7 @@ def _refusal(cfg, area, path, missing) -> str:
     for file, anchor in missing:
         name = areas.rel(cfg, file)
         lines.append(f"- {name}#{anchor}, the section {anchor}" if anchor else f"- {name}")
-    lines.append("Read them, then make the change again. If a file changes what you planned to do, follow the file "
-                 "and say so in your report.")
+    lines.append("Read them, then make the change again. If what you read changes your mind about how to do it, do it the way you now think is right, and say in your report what changed and why.")
     return "\n".join(lines)
 
 
