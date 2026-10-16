@@ -15,30 +15,39 @@ STEPS = ["Welcome", "How it works", "You", "This project", "Done"]
 HELP = [("↑↓", "move"), ("enter", "pick"), ("←", "back"), ("q", "quit")]
 
 WELCOME = (
-    "atlasmd is a plugin for Claude Code. It gives every session of a project the same small "
-    "start reading, at the start and after each compaction. It makes an agent read the guide of an "
-    "area before the agent changes the area. After each compaction it writes one line to a log, so "
-    "you can see what the compaction cost."
+    "atlasmd is a hook inside Claude Code. It runs at the start of a session, before every edit, and "
+    "after every compaction.\n\n"
+    "At the start of a session, it gives Claude the Markdown files in docs/start/ of your project, "
+    "and nothing else.\n\n"
+    "Before an edit, when the file is in a folder that atlasmd.toml lists, it refuses the edit until "
+    "Claude has read the files listed for that folder, for example the folder's README and the "
+    "decisions behind it.\n\n"
+    "After a compaction, it writes the date, the project folder and the size of the summary to "
+    "compacts.log, and it makes Claude read the listed files again before its next edit.\n\n"
+    "This setup has five steps. Every answer can be changed later with amd config or amd set."
 )
 HOW = (
-    "## The start reading\n"
-    "A project keeps the files that every session reads first in one folder, docs/start/, numbered "
-    "in the order of the read. At each start and after each compaction, the hook gives these files "
-    "to the session, within a budget of tokens. So a fresh session and a compacted session start "
-    "with the same reading. Claude Code takes at most 10,000 characters from a hook, so a longer start "
-    "reading comes as a list of the files, and the session reads each file.\n\n"
-    "## The guard\n"
-    "A project names its areas in atlasmd.toml. Each area has code paths and a pack: the Markdown "
-    "files to read before a change in the area. The hook refuses an edit or a write in an area "
-    "until the agent read every file of the pack in this session.\n\n"
-    "## The ledger after a compaction\n"
-    "The ledger records the files that each session and each agent read. A compaction removes those "
-    "files from the context, so the ledger starts again, and the first change in an area reads the "
-    "pack again. The log gets one line for each compaction: the time, the project, the trigger and "
-    "the size of the summary."
+    "## At the start of a session\n"
+    "Claude Code runs the hook. The hook reads the Markdown files in docs/start/ of the project, in "
+    "name order, and hands them to Claude. A hook can hand over at most 10,000 characters. When the "
+    "files are shorter, Claude gets their text. When they are longer, Claude gets the list of the "
+    "files and reads each one with one Read. The same happens after every compaction, so a "
+    "compacted session starts the same way as a fresh one.\n\n"
+    "## Before an edit\n"
+    "atlasmd.toml lists folders, and for each folder the files to read before a change there, for "
+    "example services/scrubber/README.md and the decisions it depends on. When Claude is about to "
+    "change a file in one of those folders, the hook looks up which of the listed files Claude has "
+    "read in this session. If one is missing, the hook refuses the edit and names the files. Claude "
+    "reads them and makes the edit again.\n\n"
+    "## After a compaction\n"
+    "The hook keeps the list of the files each session has read, in ~/.claude/plugins/data/amd/ledgers/. "
+    "A compaction removes those files from Claude's context, so the hook empties the list, and the "
+    "next edit in a listed folder reads the files again. The hook also appends one line to "
+    "compacts.log: the date and time, the project folder, whether the compaction was manual or "
+    "automatic, and the size of the summary in characters."
 )
-YOU = ("Two settings of your own. They apply to every project on this computer. "
-       "When the option offer_setup of the plugin is set in Claude Code, that option wins.")
+YOU = ("Two settings of your own, for every project on this computer. When the plugin's option "
+       "offer_setup is set in Claude Code, that value wins over the setting here.")
 
 
 def short(path):
@@ -74,15 +83,15 @@ class Setup(tui.Page):
     def content(self):
         """(markup, [(label, value, hint, action)]) of the current step."""
         if self.step == 0:
-            return WELCOME, [("Start", "", "nothing is written before the last step", self.next),
+            return WELCOME, [("Start", "", "atlasmd saves your answers at the last step", self.next),
                              ("Quit", "", "", self.quit)]
         if self.step == 1:
             return HOW, [("Continue", "", "", self.next)]
         if self.step == 2:
             return YOU, [
-                ("Offer the setup in a new project", "yes" if self.offer else "no",
-                 "Enter switches it", self.toggle_offer),
-                ("Characters per token", f"{self.chars:g}", "Enter types a number", self.type_chars),
+                ("Suggest /amd:init", "yes" if self.offer else "no",
+                 "in a project without atlasmd.toml", self.toggle_offer),
+                ("Characters per token", f"{self.chars:g}", "atlasmd estimates tokens with it", self.type_chars),
                 ("Continue", "", "", self.next),
             ]
         if self.step == 3:
@@ -90,15 +99,17 @@ class Setup(tui.Page):
         lines = [
             "## Saved",
             f"- Your settings: {short(self.saved_to)}" if self.saved_to else "- Your settings: not saved",
-            f"- Offer the setup in a new project: {'yes' if self.offer else 'no'}",
+            f"- Suggest /amd:init in a project without atlasmd.toml: {'yes' if self.offer else 'no'}",
             f"- Characters per token: {self.chars:g}",
             "",
             "## Three commands to remember",
-            "- /amd:init in a Claude Code session sets up a project: the areas, the start reading and the names.",
-            "- amd check in a terminal shows the budget, the packs, the names and the map.",
-            "- amd why in a terminal explains the last change that the guard refused.",
+            "- /amd:init, in a Claude Code session, writes atlasmd.toml, fills docs/start/, and lists which files "
+            "Claude reads before it changes a file in each folder.",
+            "- amd check, in a terminal, finds problems: docs/start/ over its token limit, listed files that do not "
+            "exist, and file names that break the rule of their folder.",
+            "- amd why, in a terminal, shows the last edit that the hook refused, and the files that Claude had not read.",
             "",
-            "Run amd setup again at any time. amd config shows the settings of a project.",
+            "You can run amd setup again at any time. amd config shows and changes atlasmd.toml of a project.",
         ]
         return "\n".join(lines), [("Finish", "", "", self.quit)]
 
@@ -109,29 +120,34 @@ class Setup(tui.Page):
             made = self.init_output.split("Made:", 1)[-1].split("\n\n", 1)[0]
             text = "amd init ran in " + short(root) + ". It made these:\n\n" + "\n".join(
                 "- " + line.strip() for line in made.splitlines() if line.strip())
-            text += ("\n\nIn a Claude Code session, /amd:init proposes the areas and fills the four files "
-                     "of docs/start/.")
+            text += ("\n\nIn a Claude Code session, /amd:init then fills the four files of docs/start/ and "
+                     "proposes which files Claude reads before a change in each folder.")
             return text, [("Continue", "", "", self.next)]
         if error:
             return f"atlasmd.toml of this project has a problem.\n\n{error}", [("Continue", "", "", self.next)]
         if cfg is None:
             text = (f"This folder has no atlasmd.toml: {short(root)}.\n\n"
-                    "amd init writes atlasmd.toml, the four files of docs/start/ and the folders of the "
-                    "convention. It overwrites nothing. In a Claude Code session, /amd:init does more: it reads "
-                    "the project, proposes the areas, and fills the four files.")
+                    "amd init writes atlasmd.toml, four template files in docs/start/, and the empty folders "
+                    "docs/decisions/, docs/plans/, docs/notes/ and docs/archive/. It overwrites nothing. In a Claude "
+                    "Code session, /amd:init does more: it reads the project, fills the four files, and proposes "
+                    "which files Claude reads before a change in each folder.")
             return text, [("Run amd init now", "", "writes in " + short(root) + " now", self.run_init),
                           ("Skip", "", "", self.next)]
         composed = start.compose(cfg)
+        n = len(composed.files)
         lines = [f"The project: {short(cfg.root)}", "",
-                 "## The start reading",
-                 f"About {composed.tokens:,} of {cfg.start.budget:,} tokens, in {len(composed.files)} files." +
-                 (" This is over the budget." if composed.over_budget else ""), "", "## The areas"]
+                 "## At the start of a session",
+                 f"Claude gets {n} file{'s' if n != 1 else ''}, about {composed.tokens:,} tokens. "
+                 f"The limit in start.budget is {cfg.start.budget:,}." +
+                 (" The files are over this limit." if composed.over_budget else ""), "",
+                 "## Before an edit"]
         if not cfg.areas:
-            lines.append("No areas yet. /amd:init in a session proposes them.")
+            lines.append("atlasmd.toml lists no folders yet. /amd:init in a Claude Code session proposes them.")
         for area in cfg.areas:
             n = len(area.pack)
             p = len(area.paths)
-            lines.append(f"- {area.name}: {p} code path{'s' if p != 1 else ''}, {n} file{'s' if n != 1 else ''} in the pack")
+            lines.append(f"- {area.name}: {n} file{'s' if n != 1 else ''} to read before a change in "
+                         f"its {p} path{'s' if p != 1 else ''}")
         lines += ["", "amd check shows the details."]
         return "\n".join(lines), [("Continue", "", "", self.next)]
 
@@ -185,7 +201,7 @@ class Setup(tui.Page):
             return True
         note = "Leave the setup? Nothing is saved."
         if self.init_output is not None:
-            note += " The files of amd init stay."
+            note += " The files that amd init wrote stay."
         key = self.ask_key(note + "  y leaves, another key stays", HELP)
         self.say("")
         return key in (ord("y"), ord("Y"))

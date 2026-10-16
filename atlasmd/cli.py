@@ -20,36 +20,36 @@ elif os.path.dirname(_HERE) not in sys.path:
 from atlasmd import __version__, areas, config, ledger, mapping, naming, scan, start, tui  # noqa: E402
 
 COMMANDS = [
-    ("setup", "the guided setup, once after the install"),
-    ("config", "the settings of this project and your own"),
-    ("scan", "the Markdown files, their size, the area candidates"),
+    ("setup", "set up atlasmd on a screen with five steps"),
+    ("config", "show and change atlasmd.toml and your own settings"),
+    ("scan", "list every Markdown file with its size in tokens"),
     ("init", "write atlasmd.toml and docs/start/, overwrite nothing"),
-    ("check", "the budget, the packs, the names and the map"),
-    ("map", "write the files and the areas into the map"),
-    ("status", "the packs this session read, the last compaction"),
-    ("why", "the last change that the guard refused, and why"),
-    ("end", "what is not committed or pushed, the opening line"),
-    ("set <key> <value>", "a personal setting: offer_setup or token_chars"),
-    ("version", "the version of atlasmd"),
+    ("check", "find problems in docs/start/, atlasmd.toml, file names"),
+    ("map", "list every Markdown file in docs/start/10-map.md"),
+    ("status", "show what this session read, and the last compaction"),
+    ("why", "show the last edit that the hook refused, and why"),
+    ("end", "show what is not committed or not pushed"),
+    ("set <key> <value>", "write offer_setup or token_chars to your settings"),
+    ("version", "print the version of atlasmd"),
 ]
 OPTIONS = [
     ("scan --json", "the same as JSON, for a skill"),
     ("check --json", "the same as JSON, for a skill"),
-    ("init --areas-json <file>", "areas from a JSON list of {name, paths, pack}"),
-    ("init --dry-run", "show what init makes, write nothing"),
-    ("status --session <id>", "the ledger of one session"),
-    ("status --agent <id>", "the ledger of one agent of that session"),
-    ("why --session <id>", "the last refusal of one session"),
+    ("init --areas-json <file>", "add the [[area]] entries of a JSON file"),
+    ("init --dry-run", "show what init writes, and write nothing"),
+    ("status --session <id>", "the files that one session read"),
+    ("status --agent <id>", "the files that a subagent of that session read"),
+    ("why --session <id>", "the last refused edit of one session"),
 ]
-ABOUT = ("atlasmd gives every session the same small start reading, "
-         "and makes an agent read an area's guide before it changes the area.")
+ABOUT = ("atlasmd tells Claude which Markdown files to read at the start of a session, and refuses a change "
+         "to a file in a listed folder until Claude has read the files listed for that folder.")
 
 TEMPLATES = {
-    "map": """# The map
+    "map": """# What this project is, and where its files are
 
-One paragraph on what this project is, for a reader who starts cold.
+One paragraph on what this project is, for a reader who knows nothing about it.
 
-## The areas
+## Files to read before a change in each folder
 
 <!-- atlasmd:areas -->
 <!-- /atlasmd:areas -->
@@ -59,8 +59,8 @@ One paragraph on what this project is, for a reader who starts cold.
 | Fact | Its place |
 |---|---|
 | a decision and its reason | `docs/decisions/`, one file per decision |
-| the state of the work | `docs/start/20-open-items.md`, one line per item with a pointer |
-| a plan for work asked for | `docs/plans/` |
+| the state of the work | `docs/start/20-open-items.md`, one line per item, with the path of the file that holds the details |
+| a plan for work that a person asked for | `docs/plans/` |
 | a dated note or a measurement | `docs/notes/` |
 
 ## Every Markdown file
@@ -70,15 +70,15 @@ One paragraph on what this project is, for a reader who starts cold.
 """,
     "open-items": """# Open items
 
-One line per item, with the file that holds its detail. An item leaves in the commit that closes it.
+One line per open item, with the path of the file that holds its details. Remove the line in the commit that closes the item.
 
 - 
 """,
     "state": """# Where things stand
 
-Rewritten at the end of every session. Read first after a compaction.
+Claude writes this file again at the end of every session, with /amd:end.
 
-## Done since the last ending
+## Done since the last /amd:end
 
 ## What to look at
 
@@ -86,12 +86,12 @@ Rewritten at the end of every session. Read first after a compaction.
 
 ## Next
 """,
-    "way-of-work": """# The way of work
+    "way-of-work": """# How to work in this project
 
-The rules a session follows in this project. Short, and only what every session needs.
+The rules that Claude follows in every session of this project. Keep only what every session needs.
 
-- Read an area's guide before you change the area. The guard refuses the change until the guide was read.
-- When a file you read changes what you were about to do, do what you read and say so in your report.
+- Before you change a file in a folder that atlasmd.toml lists, read the files listed for that folder. The hook refuses the edit until you read them.
+- If a file you read changes what you planned to do, follow the file and say so in your report.
 """,
 }
 FOLDERS = ["docs/decisions", "docs/plans", "docs/notes", "docs/archive"]
@@ -275,18 +275,18 @@ def load_areas(path, cwd):
     except ValueError as exc:
         raise Problem(f"{p} is not valid JSON: {exc}.")
     if not isinstance(data, list):
-        raise Problem(f"{p} must hold a JSON list of areas, each with name, paths and pack.")
+        raise Problem(f"{p} must hold a JSON list of [[area]] entries, each with name, paths and pack.")
     result = []
     for n, item in enumerate(data, 1):
         if not isinstance(item, dict) or not isinstance(item.get("name"), str) or not item["name"].strip():
-            raise Problem(f"Area {n} in {p} must be an object with a name.")
+            raise Problem(f"Entry {n} in {p} must be an object with a name.")
         for key in ("paths", "pack"):
             value = item.get(key, [])
             if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-                raise Problem(f"The {key} of the area \"{item['name']}\" in {p} must be a list of paths.")
+                raise Problem(f"In {p}, {key} of \"{item['name']}\" must be a list of paths.")
         extra = set(item) - {"name", "paths", "pack"}
         if extra:
-            raise Problem(f"The area \"{item['name']}\" in {p} has keys that are not known: {', '.join(sorted(extra))}.")
+            raise Problem(f"In {p}, \"{item['name']}\" has keys that are not known: {', '.join(sorted(extra))}.")
         result.append({"name": item["name"].strip(), "paths": item.get("paths", []), "pack": item.get("pack", [])})
     return result
 
@@ -332,8 +332,8 @@ def cmd_init(cwd, args):
             raise Problem(str(exc))
         kept.append(config.CONFIG_NAME)
         if items:
-            notes.append(f"atlasmd.toml exists, so init did not add the {len(items)} areas. "
-                         "Add these entries to it by hand:\n\n" + areas_toml(items))
+            notes.append(f"atlasmd.toml exists, so init did not add the {len(items)} [[area]] entries. "
+                         "Copy them into atlasmd.toml by hand:\n\n" + areas_toml(items))
         new_text = None
     else:
         new_text = config.defaults_text().rstrip("\n") + "\n"
@@ -345,9 +345,9 @@ def cmd_init(cwd, args):
             try:
                 cfg = config.load(probe)
             except config.ConfigError as exc:
-                raise Problem(f"The areas do not make a valid atlasmd.toml, so init wrote nothing. {exc}")
+                raise Problem(f"With these [[area]] entries, atlasmd.toml is not valid, so init wrote nothing. {exc}")
         cfg.root, cfg.path = root, toml_path
-        made.append(config.CONFIG_NAME + (f" with {len(items)} areas" if items else ""))
+        made.append(config.CONFIG_NAME + (f" with {len(items)} [[area]] entries" if items else ""))
 
     writes = []  # (path, text or None for a folder)
     if new_text is not None:
@@ -378,7 +378,8 @@ def cmd_init(cwd, args):
         exclude = exclude_file(root)
         top = scan.git_root(root)
         if exclude is None or top is None:
-            notes.append("This folder is not in a git repository, so init excluded no private files.")
+            notes.append("This folder is not in a git repository, so init did not add the files under [private] "
+                         "to .git/info/exclude.")
         else:
             present = set(exclude.read_text(encoding="utf-8").splitlines()) if exclude.is_file() else set()
             for p in cfg.private:
@@ -404,7 +405,7 @@ def cmd_init(cwd, args):
             with open(exclude, "a", encoding="utf-8", newline="\n") as fh:
                 if before and not before.endswith("\n"):
                     fh.write("\n")
-                fh.write("# atlasmd: the private files of the start reading\n" + "\n".join(exclude_add) + "\n")
+                fh.write("# atlasmd: the files under [private] in atlasmd.toml\n" + "\n".join(exclude_add) + "\n")
 
     out(f"atlasmd init  {root}" + ("  (dry run: nothing written)" if dry else ""))
     out()
@@ -419,7 +420,7 @@ def cmd_init(cwd, args):
         out()
         out(note)
     out()
-    out("Next: fill the files of docs/start/, then run amd map and amd check.")
+    out(f"Next: write the text of the files in {cfg.start.dir}/, then run amd map and amd check.")
     return 0
 
 
@@ -483,57 +484,66 @@ def run_check(cfg):
 
     composed = start.compose(cfg)
     chars = sum(len(scan.read_text(p).rstrip()) for p, _t in composed.files)
+    given = sum(1 for p, _t in composed.files if f"\n\n## {areas.rel(cfg, p)}\n\n" in composed.text)
     budget = {"tokens": composed.tokens, "budget": cfg.start.budget, "over": composed.over_budget,
               "chars": chars, "char_limit": start.CONTEXT_LIMIT, "over_limit": bool(composed.over_limit),
-              "inject": cfg.start.inject,
+              "inject": cfg.start.inject, "given": given,
               "files": [{"path": rel(root, p), "tokens": t} for p, t in composed.files]}
     if not composed.files and not cfg.start.also:
-        add("start", f"the start reading has no files: {cfg.start.dir}/ is empty or does not exist. "
-                     "Run amd init, or point [start] also at another project's start folder.", cfg.start.dir)
+        where = "none of the files in start.files exists" if cfg.start.files else f"{cfg.start.dir}/ has no Markdown files"
+        add("start", f"{where}, so Claude gets nothing at the start of a session. "
+                     f"Run amd init, or list the {cfg.start.dir}/ folder of another project under start.also.",
+            cfg.start.dir)
     if composed.over_budget:
-        add("budget", f"the start reading has about {number(composed.tokens)} tokens, over the budget of "
-                      f"{number(cfg.start.budget)}")
+        add("budget", f"the files that Claude gets at the start have about {number(composed.tokens)} tokens, more than "
+                      f"the {number(cfg.start.budget)} in start.budget. So the hook gives Claude their list, not their text.")
     for area in cfg.areas:
         pack = areas.pack_of(cfg, area)
         if not pack:
-            add("empty-pack", f"the area \"{area.name}\" has an empty pack", area=area.name)
+            add("empty-pack", f"[[area]] \"{area.name}\" lists no files under pack, so the hook refuses no edit in its paths",
+                area=area.name)
         for path, anchor in pack:
             if not path.is_file():
-                add("missing-pack", f"{rel(root, path)} of the area \"{area.name}\" does not exist",
+                add("missing-pack", f"{rel(root, path)} does not exist, but [[area]] \"{area.name}\" lists it under pack. "
+                                    "The hook does not ask for a file that does not exist.",
                     rel(root, path), area.name)
     for a, b, pa, pb in overlaps(cfg):
-        add("overlap", f"the areas \"{a}\" and \"{b}\" overlap: {pa} and {pb}", area=f"{a}, {b}")
+        add("overlap", f"[[area]] \"{a}\" lists {pa} and [[area]] \"{b}\" lists {pb}. These paths overlap, so for a "
+                       "file in both, the hook asks only for the files under pack of one of them", area=f"{a}, {b}")
     files = scan.all_files(root)
     md = scan.markdown_files(root, files)
     for f in naming.check(cfg.naming, md):
         add("naming", f"{f['path']}: {f['text']}" if f["path"] else f["text"], f["path"])
     for f in unread(cfg, md):
-        add("unread", f"{f}: no folder rule, no pack and no start reading covers this file", f)
+        add("unread", f"{f}: no rule says when Claude reads this file. It is not in {cfg.start.dir}/, not under pack, "
+                      "and not in a folder under [naming]", f)
     map_file = root / cfg.start.map
     if map_outside(cfg):
-        pass  # the map belongs to another project, which checks it
+        pass  # the map file belongs to another project, which checks it
     elif not map_file.is_file():
-        add("map", f"the map {cfg.start.map} does not exist. Run amd init.", cfg.start.map)
+        add("map", f"{cfg.start.map}, the file in start.map, does not exist. Run amd init to make it.", cfg.start.map)
     else:
         for block in mapping.stale(cfg, files):
-            add("map", f"the {'area table' if block == 'areas' else block} in {cfg.start.map} differs from the project. Run amd map.", cfg.start.map)
+            what = "table of the [[area]] entries" if block == "areas" else "list of the Markdown files"
+            add("map", f"the {what} in {cfg.start.map} is out of date. Run amd map.", cfg.start.map)
     return {"root": str(root), "ok": not findings, "problems": len(findings), "budget": budget, "findings": findings}
 
 
 SECTIONS = [
-    ("start reading", ("start", "budget")),
-    ("packs", ("empty-pack", "missing-pack")),
+    ("start", ("start", "budget")),
+    ("folders", ("empty-pack", "missing-pack")),
     ("overlap", ("overlap",)),
-    ("naming", ("naming",)),
-    ("unread", ("unread",)),
-    ("map", ("map",)),
+    ("file names", ("naming",)),
+    ("not read", ("unread",)),
+    ("map file", ("map",)),
 ]
 GOOD = {
-    "packs": "every area has a pack, and every pack file exists",
-    "overlap": "no two areas share a path",
-    "naming": "every name matches the rule of its folder",
-    "unread": "a folder rule, a pack or the start reading covers every Markdown file",
-    "map": "the map shows the files and the areas as they are now",
+    "folders": "every listed folder has files to read before a change there, and every one of those files exists",
+    "overlap": "no file is under the paths of two [[area]] entries",
+    "file names": "every file name matches the rule of its folder under [naming]",
+    "not read": "every Markdown file in a subfolder is in {start}/, under pack, in a folder under [naming], "
+                "or in docs/archive/",
+    "map file": "{map} lists the Markdown files and the [[area]] entries as they are now",
 }
 
 
@@ -550,34 +560,46 @@ def cmd_check(cwd, args):
     out()
     for section, kinds in SECTIONS:
         hits = [f for f in result["findings"] if f["kind"] in kinds]
-        if section == "start reading":
+        if section == "start":
             ok = not hits
-            out(f"{mark(ok)} {section.ljust(label_w)}  about {number(b['tokens'])} of {number(b['budget'])} tokens "
-                f"in {len(b['files'])} files" + (", of which the files of [start] also" if cfg.start.also else ""))
+            n = len(b["files"])
+            out(f"{mark(ok)} {section.ljust(label_w)}  Claude gets {n} file{'s' if n != 1 else ''} at the start of a "
+                "session" + (", some from start.also" if cfg.start.also else "") +
+                f", about {number(b['tokens'])} tokens. start.budget is {number(b['budget'])}.")
             if not b["files"] and not hits:
-                out("    This project gives no start reading of its own.")
+                out(f"    Claude gets nothing at the start: {cfg.start.dir}/ and start.also hold no Markdown files.")
             if b["files"]:
                 w = max(len(f["path"]) for f in b["files"])
                 tw = max(len(number(f["tokens"])) for f in b["files"])
                 for f in b["files"]:
                     out(f"    {f['path'].ljust(w)}  {number(f['tokens']).rjust(tw)}")
             if b["files"]:
-                out(f"{mark(True)} {'characters'.ljust(label_w)}  {number(b['chars'])} in the files. "
-                    f"A hook can give {number(b['char_limit'])}.")
-                if b["over"] or b["over_limit"] or not b["inject"]:
-                    out("    So the hook gives the list of the files, and the session reads them, one Read per file.")
+                out(f"{mark(True)} {'characters'.ljust(label_w)}  {number(b['chars'])} in these files. "
+                    f"Claude Code takes at most {number(b['char_limit'])} from a hook.")
+                g = b["given"]
+                if not b["inject"]:
+                    out("    start.inject is false, so the hook gives Claude the list of the files, "
+                        "and Claude reads each file with one Read.")
+                elif g == n:
+                    out("    So the hook gives Claude the text of every file.")
+                elif g:
+                    first = f"first {g} files" if g != 1 else "first file"
+                    out(f"    So the hook gives Claude the text of the {first} and the list of the rest. "
+                        "Claude reads each file of the list with one Read.")
                 else:
-                    out("    So the hook gives the content of the files.")
+                    out("    So the hook gives Claude the list of the files, and Claude reads each file with one Read.")
             for f in hits:
                 out(f"{mark(False)} {section.ljust(label_w)}  {f['text']}")
             continue
         if not hits:
-            if section == "packs" and not cfg.areas:
-                out(f"{mark(True)} {section.ljust(label_w)}  no areas yet")
-            elif section == "map" and map_outside(cfg):
-                out(f"{mark(True)} {section.ljust(label_w)}  the map is in another project, {cfg.start.map}, which checks it")
+            if section == "folders" and not cfg.areas:
+                out(f"{mark(True)} {section.ljust(label_w)}  atlasmd.toml has no [[area]] entries yet, "
+                    "so the hook refuses no edit")
+            elif section == "map file" and map_outside(cfg):
+                out(f"{mark(True)} {section.ljust(label_w)}  {cfg.start.map} is in another project. Run amd check there.")
             else:
-                out(f"{mark(True)} {section.ljust(label_w)}  {GOOD[section]}")
+                out(f"{mark(True)} {section.ljust(label_w)}  "
+                    f"{GOOD[section].format(start=cfg.start.dir, map=cfg.start.map)}")
         for f in hits:
             out(f"{mark(False)} {section.ljust(label_w)}  {f['text']}")
     out()
@@ -591,17 +613,20 @@ def cmd_map(cwd, args):
     parse(args)
     cfg = load_config(cwd)
     if map_outside(cfg):
-        raise Problem(f"The map of this project is {cfg.start.map}, in another project. Run amd map there.")
+        raise Problem(f"The map file of this project, {cfg.start.map}, is in another project. Run amd map there.")
     files = scan.all_files(cfg.root)
     result = mapping.write(cfg, files)
     md = [f for f in scan.markdown_files(cfg.root, files)]
     where = rel(cfg.root, result["path"])
     if result["changed"]:
-        out(f"{mark(True)} wrote the tree of {len(md)} Markdown files and {len(cfg.areas)} areas into {where}")
+        out(f"{mark(True)} wrote the list of {len(md)} Markdown files and the table of {len(cfg.areas)} [[area]] entries "
+            f"into {where}")
     else:
-        out(f"{mark(True)} {where} already shows the {len(md)} Markdown files and the {len(cfg.areas)} areas")
+        out(f"{mark(True)} {where} already has the list of {len(md)} Markdown files and the table of "
+            f"{len(cfg.areas)} [[area]] entries. Nothing changed.")
     for m in result["added"]:
-        out(f"  The marker {m} was missing, so its block went to the end of the file.")
+        out(f"  The marker {m} was missing, so amd map added both markers and the text between them "
+            "at the end of the file.")
     return 0
 
 
@@ -675,19 +700,19 @@ def cmd_status(cwd, args):
         except config.ConfigError as exc:
             raise Problem(str(exc))
     if key is None:
-        out("No ledger yet. A session writes its ledger when it reads its first file.")
+        out("No session has read a file yet. The hook starts the list of read files at the first Read of a session.")
     elif data is None:
-        out(f"No ledger for the session {opts.get('--session')}" +
+        out(f"The hook has no list of read files for the session {opts.get('--session')}" +
             (f" and the agent {opts.get('--agent')}." if opts.get("--agent") else "."))
     else:
         who = f"session {data.get('session_id')}" + (f", agent {data.get('agent_id')}" if data.get("agent_id") else "")
-        out(f"atlasmd status  {who}" + ("" if opts.get("--session") else "  (the newest ledger)"))
+        out(f"atlasmd status  {who}" + ("" if opts.get("--session") else "  (the last session that read a file)"))
         out()
         read = ledger.read_paths(key)
         if cfg is None:
-            out(f"There is no atlasmd.toml in {cwd} or above it, so there are no areas to show.")
+            out(f"There is no atlasmd.toml in {cwd} or above it, so there are no listed folders to show.")
         elif not cfg.areas:
-            out("atlasmd.toml has no areas yet.")
+            out("atlasmd.toml has no [[area]] entries yet, so the hook refuses no edit.")
         else:
             full, part, none = [], [], []
             for area in cfg.areas:
@@ -702,19 +727,21 @@ def cmd_status(cwd, args):
                 else:
                     none.append((area, pack, missing))
             w = max(len(a.name) for a in cfg.areas)
-            out("Packs read in full")
+            out("Each [[area]] in atlasmd.toml lists under pack the files to read before an edit in its paths.")
+            out()
+            out("Read all files under pack")
             for area, pack, _m in full or []:
-                out(f"  {mark(True)} {area.name.ljust(w)}  {len(pack)} files")
+                out(f"  {mark(True)} {area.name.ljust(w)}  {len(pack)} file{'s' if len(pack) != 1 else ''}")
             if not full:
                 out("  none")
-            out("Packs read in part")
+            out("Read some files under pack")
             for area, pack, missing in part:
-                out(f"  {mark(False)} {area.name.ljust(w)}  {len(pack) - len(missing)} of {len(pack)} files. Missing:")
+                out(f"  {mark(False)} {area.name.ljust(w)}  {len(pack) - len(missing)} of {len(pack)} files. Not read:")
                 for p in missing:
                     out(f"      {rel(cfg.root, p)}")
             if not part:
                 out("  none")
-            out("Packs not read")
+            out("Read no file under pack")
             out("  " + (", ".join(a.name for a, _p, _m in none) if none else "none"))
             touched = []
             refusals = " ".join(r.get("text", "") for r in data.get("refusals", []) if isinstance(r, dict))
@@ -722,16 +749,16 @@ def cmd_status(cwd, args):
                 in_code = any(areas.area_of(cfg, p) is area for p in read)
                 if in_code or f"\"{area.name}\"" in refusals or f" {area.name}" in refusals:
                     touched.append(area.name)
-            out("Areas touched, with a file read in the code or a change refused")
+            out("[[area]] entries with a file read in their paths, or with a refused edit")
             out("  " + (", ".join(touched) if touched else "none"))
         n = len(data.get("refusals", []))
-        out(f"Refusals  {n}" + ("  (amd why shows the last one)" if n else ""))
+        out(f"Refused edits  {n}" + ("  (amd why shows the last one)" if n else ""))
     c = last_compaction(cfg.root if cfg else None)
     out()
     if c:
         out(f"Last compaction  {c['time']}  {c['trigger']}  a summary of {number(int(c['chars']) if c['chars'].isdigit() else 0)} characters")
     else:
-        out("Last compaction  none in the log" + (" for this project" if cfg else ""))
+        out("Last compaction  none in compacts.log" + (" for this project" if cfg else ""))
     return 0
 
 
@@ -748,14 +775,15 @@ def cmd_why(cwd, args):
             candidates.append((_when(refusals[-1].get("time")), data))
     if not candidates:
         where = f" for the session {opts['--session']}" if opts.get("--session") else ""
-        out(f"No refusal{where} in the ledgers. The guard refused no change.")
+        out(f"No refused edit{where} in the last 14 days. The hook keeps the lists of read files and refused edits "
+            "for 14 days.")
         return 0
     candidates.sort(key=lambda c: c[0].timestamp() if c[0] else 0, reverse=True)
     data = candidates[0][1]
     key = ledger.key({"session_id": data.get("session_id"), "agent_id": data.get("agent_id")})
     text = ledger.last_refusal(key) or data["refusals"][-1]["text"]
     who = f"session {data.get('session_id')}" + (f", agent {data.get('agent_id')}" if data.get("agent_id") else "")
-    out(f"The last refusal  {data['refusals'][-1].get('time', '')}  {who}")
+    out(f"The last refused edit  {data['refusals'][-1].get('time', '')}  {who}")
     out()
     out(text)
     out()
@@ -766,8 +794,9 @@ def cmd_why(cwd, args):
             mode = config.load(path).guard.mode
         except config.ConfigError:
             mode = ""
-    out("The guard mode is guard.mode in atlasmd.toml" + (f", now {mode}." if mode else "."))
-    out("The mode deny refuses the change, remind lets it through with a reminder, and off stops the guard.")
+    out(f"guard.mode in atlasmd.toml is {mode}." if mode else "guard.mode in atlasmd.toml sets what the hook does.")
+    out("With deny, the hook refuses the edit. With remind, it permits the edit and tells Claude the files to read. "
+        "With off, it does not look at edits.")
     return 0
 
 
@@ -815,13 +844,14 @@ def cmd_end(cwd, args):
             cfg = config.load(path)
         except config.ConfigError as exc:
             raise Problem(str(exc))
-        out("The opening line for a fresh chat:")
+        out("The first message for a fresh chat, from start.line in atlasmd.toml:")
         out()
         out(cfg.start.line)
         out()
-        out(f"The state file: {Path(os.path.abspath(cfg.root / cfg.start.state))}")
+        out(f"The file that says where the work stands, from start.state: "
+            f"{Path(os.path.abspath(cfg.root / cfg.start.state))}")
     else:
-        out("There is no atlasmd.toml here, so there is no opening line. Run amd init.")
+        out("There is no atlasmd.toml here, so there is no first message from start.line. Run amd init.")
     return 1 if problems else 0
 
 
@@ -842,8 +872,8 @@ def cmd_screen(name):
     try:
         import curses  # noqa: F401
     except ImportError as exc:
-        out(f"The screens need the curses module, and this Python has none ({exc}).")
-        out("On Windows: pip install windows-curses. Every other command works without it.")
+        out(f"amd setup and amd config need the curses module, and this Python has none ({exc}).")
+        out("On Windows, run: pip install windows-curses. Every other command of amd works without it.")
         return 2
     message = tui.needs_terminal(name)
     if message:

@@ -54,7 +54,7 @@ class Naming(unittest.TestCase):
         found = naming.check({"docs/x": "^[a-"}, ["docs/x/a.md"])
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]["path"], "")
-        self.assertIn("not a valid pattern", found[0]["text"])
+        self.assertIn("not a valid regular expression", found[0]["text"])
 
 
 if __name__ == "__main__":

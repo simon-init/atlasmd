@@ -282,37 +282,38 @@ _DEFAULTS_TEXT = r'''# The settings of atlasmd for this project.
 # Every path is relative to the folder of this file, with / as the separator.
 
 [start]
-# The start reading: the files that a session reads at its start and after each compaction.
-dir = "docs/start"                 # the files of this folder, in name order, are the start reading
+# The Markdown files that Claude gets at the start of a session and after each compaction.
+dir = "docs/start"                 # Claude gets the Markdown files of this folder, in name order
 files = []                         # or a list of paths, in order. When this list has paths, dir is not used
-also = []                          # more folders or files, read after the files above. For example, the start folder of a second repository
-budget = 30000                     # the limit in tokens, estimated. Above it, the hook gives the list of files and a warning, not their content
-inject = true                      # false: the hook gives the list of files and tells the agent to read them, never their content
-state = "docs/start/30-state.md"   # the file that the ending writes again
-map = "docs/start/10-map.md"       # the map, which a subagent gets at its start
-line = "Say where things stand."   # the message that a person sends to a fresh chat
+also = []                          # more folders or files, given after the files above. For example, docs/start/ of a second repository
+budget = 30000                     # the limit in estimated tokens. Above it, Claude gets the list of the files and a warning, not their text
+inject = true                      # false: Claude always gets the list of the files and reads them, never their text from the hook
+state = "docs/start/30-state.md"   # the file that says where the work stands. /amd:end writes it again
+map = "docs/start/10-map.md"       # the map file. amd map writes every Markdown file and every [[area]] into it. A subagent gets it at its start
+line = "Say where things stand."   # the first message that a person sends in a fresh chat. amd end prints it
 
 [guard]
-mode = "deny"                      # deny, remind or off
-bash = true                        # true: the guard also looks at the Bash commands that write a file
+# Before an edit of a file in the paths of an [[area]], the hook looks at which files under pack Claude has read in this session.
+mode = "deny"                      # deny: refuse the edit until Claude reads them. remind: permit it and name the files. off: do not look
+bash = true                        # true: the hook also looks at the Bash commands that write a file
 
 [agents]
-inject = "map"                     # map, start or none: what a subagent gets at its start
+inject = "map"                     # what a subagent gets at its start: map (the file in start.map), start (the files above) or none
 
 [private]
-files = []                         # Markdown files of the start reading that git never commits
+files = []                         # Markdown files that Claude gets at the start but that git never commits. amd init adds them to .git/info/exclude
 
 [naming]
-# For each folder, the regular expression that a file name must match. The command line examines these names, the hook does not.
+# For each folder, the regular expression that a file name must match. amd check examines these names. The hook does not.
 "docs/start" = "^[0-9]{2}-[a-z0-9-]+\\.md$"
 "docs/decisions" = "^P[0-9]{3}-[a-z0-9-]+\\.md$"
 "docs/notes" = "^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+\\.md$"
 "docs/plans" = "^[a-z0-9-]+\\.md$"
 
-# An area is one part of the project. It has code paths and a pack.
-# The pack is the list of files to read before a change in the area.
+# Each [[area]] lists folders or files under paths, and under pack the files that Claude must read
+# before it changes a file in those paths. The hook refuses the edit until Claude reads them in this session.
 # A path that ends in / is a folder. A path without / at its end is one file.
-# A pack entry can end in #<anchor>. Then it names one section of the file.
+# A pack entry can end in #<anchor>. Then the refusal names that section of the file, and a read of the file counts.
 # Remove the # signs below to use this example.
 #
 # [[area]]

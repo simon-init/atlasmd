@@ -190,7 +190,8 @@ def render(data):
             else:
                 lines.append(f"  {name}")
     lines.append("")
-    lines.append(f"Area candidates  {len(data['candidates'])} folders with source files and a README")
+    lines.append(f"Folders with source files and a README  {len(data['candidates'])}. "
+                 "/amd:init can list each one as an [[area]] in atlasmd.toml")
     if data["candidates"]:
         width = max(len(c["path"]) for c in data["candidates"])
         lines.append("")

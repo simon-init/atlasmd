@@ -1,14 +1,14 @@
 ---
 name: status
-description: Show which area guides this session read, which it did not, and the last compaction
+description: Show which files under pack in atlasmd.toml this session read, which it did not read, and the last compaction
 ---
 
-Run `"${CLAUDE_PLUGIN_ROOT}/bin/amd" status --session "${CLAUDE_SESSION_ID}"`. If that variable is empty, run `"${CLAUDE_PLUGIN_ROOT}/bin/amd" status`, which reads the newest ledger.
+Run `"${CLAUDE_PLUGIN_ROOT}/bin/amd" status --session "${CLAUDE_SESSION_ID}"`. If that variable is empty, run `"${CLAUDE_PLUGIN_ROOT}/bin/amd" status`, which shows the last session that read a file.
 
 Tell the person, in short lines:
-- the packs that this session read in full,
-- the packs that it read in part, with the files that are missing,
-- the areas that it changed or tried to change,
-- the time and the trigger of the last compaction.
+- each `[[area]]` whose files under `pack` this session read in full,
+- each `[[area]]` whose files under `pack` it read in part, with the files that it did not read,
+- the `[[area]]` entries where it read a file in the paths, or had an edit refused,
+- the time of the last compaction, and whether it was manual or automatic.
 
-Then say that the guard refuses a change in an area until its whole pack was read, and that a compaction makes the next change in an area read the pack again.
+Then say this: when `guard.mode` is `deny`, the hook refuses an edit in the paths of an `[[area]]` until the session reads every file under its `pack`. After a compaction, the session must read those files again before its next edit there.

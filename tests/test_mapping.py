@@ -49,16 +49,16 @@ class Tree(unittest.TestCase):
         tree = mapping.tree_block(cfg.root).splitlines()
         self.assertIn("- `README.md`: Top", tree)
         self.assertIn("- `docs/plans/login.md`: The login", tree)
-        self.assertIn("- `docs/archive/`: 2 files of history, never read at a start", tree)
+        self.assertIn("- `docs/archive/`: 2 old files, kept for history. Claude does not get them at the start", tree)
         self.assertFalse(any("a.md" in line for line in tree))
 
     def test_the_area_table_has_one_row_per_area(self):
         cfg = project(self.tmp.name, '[[area]]\nname = "login"\npaths = ["app/login/"]\n'
                                      'pack = ["docs/plans/login.md", "docs/x.md#P15"]\n')
         table = mapping.areas_block(cfg).splitlines()
-        self.assertEqual(table[0], "| Area | Code paths | Pack |")
+        self.assertEqual(table[0], "| Name | Folders and files | Read before a change there |")
         self.assertEqual(table[2], "| login | `app/login/` | `docs/plans/login.md`, `docs/x.md#P15` |")
-        self.assertIn("No areas yet", mapping.areas_block(project(self.tmp.name)))
+        self.assertIn("lists no folders yet", mapping.areas_block(project(self.tmp.name)))
 
     def test_stale_names_the_blocks_that_differ(self):
         cfg = project(self.tmp.name)

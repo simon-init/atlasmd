@@ -23,23 +23,23 @@ CHOICES = {
 }
 NUMBERS = {("start", "budget"): (1000, 1000, 10_000_000), ("you", "token_chars"): (0.1, 0.5, 100)}
 HINTS = {
-    ("start", "budget"): "tokens of the start reading",
-    ("start", "inject"): {True: "the hook gives the file content", False: "the hook gives a list of files"},
-    ("start", "dir"): "its files, in name order",
-    ("start", "files"): "when set, dir is not used",
-    ("start", "also"): "read after the files above",
-    ("start", "state"): "the ending writes it again",
+    ("start", "budget"): "token limit for these files",
+    ("start", "inject"): {True: "Claude gets the text of the files", False: "Claude gets only a list of files"},
+    ("start", "dir"): "its Markdown files, in name order",
+    ("start", "files"): "if not empty, dir is not used",
+    ("start", "also"): "Claude gets these after dir",
+    ("start", "state"): "says where the work stands",
     ("start", "map"): "a subagent gets it at its start",
-    ("start", "line"): "the message for a fresh chat",
-    ("guard", "mode"): {"deny": "no change before the pack is read",
-                        "remind": "a reminder, and the change goes on",
-                        "off": "no guard"},
-    ("guard", "bash"): "Bash commands that write, too",
-    ("agents", "inject"): {"map": "a subagent gets the map",
-                           "start": "a subagent gets the start reading",
+    ("start", "line"): "first message for a fresh chat",
+    ("guard", "mode"): {"deny": "no edit until Claude reads pack",
+                        "remind": "permit it and name the files",
+                        "off": "do not look at edits"},
+    ("guard", "bash"): "also look at Bash file writes",
+    ("agents", "inject"): {"map": "a subagent gets start.map",
+                           "start": "a subagent gets the files above",
                            "none": "a subagent gets nothing"},
-    ("you", "offer_setup"): "offer /amd:init in a new project",
-    ("you", "token_chars"): "characters per token",
+    ("you", "offer_setup"): "offer /amd:init without atlasmd.toml",
+    ("you", "token_chars"): "characters per estimated token",
 }
 LABELS = {("you", "offer_setup"): "offer setup", ("you", "token_chars"): "token chars"}
 
@@ -133,7 +133,7 @@ class Settings(tui.Page):
         if self.error:
             self.say(self.error, problem=True)
         elif not self.cfg:
-            self.say("No atlasmd.toml here or above, so only your own settings are here. Run amd init.")
+            self.say("No atlasmd.toml here or above, so this screen shows your own settings only.")
 
     # ------------------------------------------------------------ rows
     def editable(self, ident):
@@ -144,14 +144,14 @@ class Settings(tui.Page):
         out = []
         if self.cfg:
             for table, keys, title in (("start", ("budget", "inject", "dir", "files", "also", "state", "map", "line"),
-                                        "START READING"),
-                                       ("guard", ("mode", "bash"), "GUARD"),
-                                       ("agents", ("inject",), "AGENTS")):
+                                        "[start]  what Claude gets at the start of a session"),
+                                       ("guard", ("mode", "bash"), "[guard]  when the hook refuses an edit"),
+                                       ("agents", ("inject",), "[agents]  what a subagent gets at its start")):
                 out.append(("heading", None, title))
                 for key in keys:
                     out.append(("value", (table, key), None))
                 out.append(("blank", None, None))
-            out.append(("heading", None, "AREAS"))
+            out.append(("heading", None, "[[area]]  folders, and the files to read before a change there"))
             if self.cfg.areas:
                 out.append(("route", None, None))
                 out.append(("route2", None, None))
@@ -162,9 +162,10 @@ class Settings(tui.Page):
                     if i == current:
                         out.extend(self.area_detail(i))
             else:
-                out.append(("note", None, "No areas yet. /amd:init in a session proposes them."))
+                out.append(("note", None, "atlasmd.toml lists no folders yet. /amd:init in a Claude Code session "
+                                          "proposes them."))
             out.append(("blank", None, None))
-        out.append(("heading", None, "YOU"))
+        out.append(("heading", None, "your own settings, for every project"))
         out.append(("value", ("you", "offer_setup"), None))
         out.append(("value", ("you", "token_chars"), None))
         return out
@@ -189,7 +190,7 @@ class Settings(tui.Page):
         out = [("detail", None, ("paths", ", ".join(area.paths) or "none", False))]
         pack = areas_mod.pack_of(self.cfg, area)
         if not pack:
-            out.append(("detail", None, ("pack", "empty", True)))
+            out.append(("detail", None, ("pack", "empty, so the hook refuses no edit here", True)))
         for n, (path, anchor) in enumerate(pack):
             name = cli.rel(self.cfg.root, path) + (f"#{anchor}" if anchor else "")
             missing = not path.is_file()
@@ -206,7 +207,7 @@ class Settings(tui.Page):
         ident = self.selected()
         if ident is None or ident[0] == "area":
             if ident is not None:
-                self.say("The areas are read only here. They live in atlasmd.toml, and /amd:init writes them.")
+                self.say("Change [[area]] entries in atlasmd.toml. This screen cannot change them.")
             return
         if ident in CHOICES:
             options = CHOICES[ident]
@@ -268,7 +269,7 @@ class Settings(tui.Page):
         if mine:
             cli.save_personal(mine)
         self.saved = dict(self.values)
-        self.say("Saved. The next tool call of a session uses it." if changed else "Nothing changed.")
+        self.say("Saved. The hook uses the new values from the next tool call." if changed else "Nothing changed.")
         return True
 
     def confirm_quit(self):
@@ -348,7 +349,8 @@ class Settings(tui.Page):
                 nw = min(28, max(len(a.name) for a in self.cfg.areas))
                 self.put(y, 4, tui.fit(area.name, nw), curses.A_BOLD if chosen else 0)
                 n = len(area.pack)
-                info = f"{len(area.paths)} code path{'s' if len(area.paths) != 1 else ''}, {n} file{'s' if n != 1 else ''} in the pack"
+                p = len(area.paths)
+                info = f"{p} path{'s' if p != 1 else ''}, {n} file{'s' if n != 1 else ''} to read first"
                 self.put(y, 4 + nw + 2, tui.fit(info, w - nw - 9), self.dim())
             elif kind == "detail":
                 name, text, bad = extra

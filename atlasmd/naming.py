@@ -32,7 +32,7 @@ def check(rules, paths):
             compiled[folder] = re.compile(pattern)
         except re.error as exc:
             findings.append({"path": "", "folder": folder, "rule": pattern,
-                             "text": f"the rule of {_norm(folder)} is not a valid pattern: {exc}"})
+                             "text": f"the rule for {_norm(folder)}/ under [naming] is not a valid regular expression: {exc}"})
     for rel in paths:
         found = rule_for(rules, rel)
         if not found or found[0] not in compiled:
@@ -43,5 +43,5 @@ def check(rules, paths):
             continue
         if not compiled[folder].fullmatch(name):
             findings.append({"path": rel, "folder": folder, "rule": pattern,
-                             "text": f"the name does not match the rule of {_norm(folder)}: {pattern}"})
+                             "text": f"the file name does not match the rule for {_norm(folder)}/ under [naming]: {pattern}"})
     return findings

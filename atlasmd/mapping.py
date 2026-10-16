@@ -29,14 +29,15 @@ def tree_block(root, files=None):
         heading = scan.first_heading(root / rel)
         lines.append(f"- `{rel}`: {heading}" if heading else f"- `{rel}`")
     if archived:
-        lines.append(f"- `{ARCHIVE}`: {len(archived)} files of history, never read at a start")
+        lines.append(f"- `{ARCHIVE}`: {len(archived)} old files, kept for history. Claude does not get them at the start")
     return "\n".join(lines) if lines else "- no Markdown files yet"
 
 
 def areas_block(cfg):
     if not cfg.areas:
-        return "No areas yet. The areas go into `atlasmd.toml` as `[[area]]` entries."
-    rows = ["| Area | Code paths | Pack |", "|---|---|---|"]
+        return ("`atlasmd.toml` lists no folders yet. Each `[[area]]` entry in it names folders, and the files "
+                "to read before a change there.")
+    rows = ["| Name | Folders and files | Read before a change there |", "|---|---|---|"]
     for a in cfg.areas:
         paths = ", ".join(f"`{_cell(p)}`" for p in a.paths)
         pack = ", ".join(f"`{_cell(p)}`" for p in a.pack)

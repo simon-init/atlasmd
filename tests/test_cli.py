@@ -198,7 +198,7 @@ class Check(Base):
         code, plain = self.amd("check")
         self.assertEqual(code, 1)
         self.assertTrue(any(line.startswith("✗ overlap") for line in plain.splitlines()))
-        self.assertTrue(any(line.startswith("✓ start reading") for line in plain.splitlines()))
+        self.assertTrue(any(line.startswith("✓ start") for line in plain.splitlines()))
 
         # Fix every problem, and the check passes.
         write(self.root, "docs/decisions/P001-policy.md", "# P001 The policy\n")
@@ -286,7 +286,7 @@ class Scan(Base):
         code, text = self.amd("scan")
         self.assertEqual(code, 0)
         self.assertIn("services/", text)
-        self.assertIn("Area candidates  2 folders", text)
+        self.assertIn("Folders with source files and a README  2", text)
 
     def test_scan_skips_ignored_files(self):
         write(self.root, ".gitignore", "secret/\n")
@@ -335,7 +335,7 @@ class Ledger(Base):
               "pack": ["services/scrub/README.md", "docs/old-notes.md"]}]))
         code, text = self.amd("why")
         self.assertEqual(code, 0)
-        self.assertIn("No refusal", text)
+        self.assertIn("No refused edit", text)
         key = ledger.key({"session_id": "s1"})
         ledger.add(key, self.root / "services/scrub/README.md")
         ledger.record_refusal(key, "atlasmd refused the edit of services/scrub/core/a.py.")
