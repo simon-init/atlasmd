@@ -54,9 +54,9 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.env = {k: os.environ.get(k) for k in ("CLAUDE_PLUGIN_DATA", "CLAUDE_PROJECT_DIR",
+        self.env = {k: os.environ.get(k) for k in ("ATLASMD_DATA", "CLAUDE_PROJECT_DIR",
                                                     "CLAUDE_PLUGIN_OPTION_OFFER_SETUP")}
-        os.environ["CLAUDE_PLUGIN_DATA"] = str(Path(self.tmp.name) / "data")
+        os.environ["ATLASMD_DATA"] = str(Path(self.tmp.name) / "data")
         os.environ.pop("CLAUDE_PROJECT_DIR", None)
         os.environ.pop("CLAUDE_PLUGIN_OPTION_OFFER_SETUP", None)
         self.addCleanup(self.restore_env)
@@ -325,7 +325,7 @@ class Personal(Base):
         code, _ = self.amd("set", "offer_setup", "no")
         self.assertEqual(code, 0)
         self.assertEqual(cli.read_personal(), {"token_chars": 3.0, "offer_setup": False})
-        self.assertEqual(cli.personal_path().parent, Path(os.environ["CLAUDE_PLUGIN_DATA"]))
+        self.assertEqual(cli.personal_path().parent, Path(os.environ["ATLASMD_DATA"]))
         self.assertEqual(self.amd("set", "offer_setup", "maybe")[0], 2)
         self.assertEqual(self.amd("set", "colour", "red")[0], 2)
         self.assertEqual(self.amd("set", "token_chars", "-1")[0], 2)

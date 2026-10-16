@@ -1,6 +1,6 @@
 """What a session and an agent read, the refusals, the folders it was told about, and the compaction log.
 
-Every file lives under the data folder of the plugin (CLAUDE_PLUGIN_DATA). A ledger is one small
+Every file lives under the data folder of atlasmd (config.data_dir()). A ledger is one small
 JSON file per key. A lock file keeps two hooks that run at the same time from losing a read.
 """
 from __future__ import annotations

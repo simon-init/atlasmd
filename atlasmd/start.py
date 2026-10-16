@@ -6,7 +6,7 @@ import os
 import pathlib
 from dataclasses import dataclass, field
 
-from atlasmd import areas
+from atlasmd import areas, projects
 from atlasmd.config import Config, norm, personal
 
 # Claude Code puts at most 10,000 characters of a hook's additionalContext into the context.
@@ -27,6 +27,7 @@ class Composed:
     over_budget: bool
     files: list[tuple[pathlib.Path, int]] = field(default_factory=list)   # each file with its estimated tokens
     over_limit: bool = False         # the content is longer than CONTEXT_LIMIT, so the text is the list
+    others: list[str] = field(default_factory=list)   # the names of the other repositories of the group
 
 
 def estimate_tokens(text: str, token_chars=2.5) -> int:
@@ -48,15 +49,33 @@ def _expand(cfg: Config, entry: str) -> list[pathlib.Path]:
     return [path] if path.is_file() else []
 
 
+def own_files(cfg: Config) -> list[pathlib.Path]:
+    """The files of [start] files, or of the [start] dir folder in name order. Not [start] also."""
+    return [p for entry in cfg.start.files for p in _expand(cfg, entry)] if cfg.start.files else _expand(cfg, cfg.start.dir)
+
+
 def files(cfg: Config) -> list[pathlib.Path]:
     """The start reading in order: the files of [start] files, or of the [start] dir folder in name order, then [start] also."""
-    first = [p for entry in cfg.start.files for p in _expand(cfg, entry)] if cfg.start.files else _expand(cfg, cfg.start.dir)
     result, seen = [], set()
-    for path in first + [p for entry in cfg.start.also for p in _expand(cfg, entry)]:
+    for path in own_files(cfg) + [p for entry in cfg.start.also for p in _expand(cfg, entry)]:
         if norm(path) not in seen:
             seen.add(norm(path))
             result.append(path)
     return result
+
+
+def with_group(cfg: Config) -> tuple[list[pathlib.Path], list[Config]]:
+    """The start reading of cfg, then the files of [start] files or [start] dir of every other repository of
+    its group, in the order of their names. Each file once. The other repositories come as a second list."""
+    result = files(cfg)
+    seen = {norm(path) for path in result}
+    others = projects.others(cfg)
+    for other in others:
+        for path in own_files(other):
+            if norm(path) not in seen:
+                seen.add(norm(path))
+                result.append(path)
+    return result, others
 
 
 def _read(path: pathlib.Path) -> str:
@@ -68,21 +87,30 @@ def _count(n: int) -> str:
     return f"{n} file" if n == 1 else f"{n} files"
 
 
+def _head(cfg: Config, count: int, tokens: int, others: list[Config]) -> str:
+    if not others:
+        return f"atlasmd: {cfg.root.name} has {_count(count)} to read at the start, about {tokens:,} tokens."
+    more = "1 more repository" if len(others) == 1 else f"{len(others)} more repositories"
+    return (f"atlasmd: {cfg.root.name} and {more} of the group \"{cfg.group}\" have {_count(count)} to read at the "
+            f"start, about {tokens:,} tokens.")
+
+
 def compose(cfg: Config) -> Composed:
     token_chars = personal()["token_chars"]
-    paths = files(cfg)
+    paths, others = with_group(cfg)
+    names = [other.root.name for other in others]
     contents = [_read(path) for path in paths]
     measured = [(path, estimate_tokens(text, token_chars)) for path, text in zip(paths, contents)]
     tokens = sum(n for _, n in measured)
     over_budget = tokens > cfg.start.budget
     if not paths:
-        return Composed(text="", tokens=0, over_budget=False, files=[])
+        return Composed(text="", tokens=0, over_budget=False, files=[], others=names)
 
-    head = f"atlasmd: {cfg.root.name} has {_count(len(paths))} to read at the start, about {tokens} tokens.\n{GUARD_LINE}"
+    head = f"{_head(cfg, len(paths), tokens, others)}\n{GUARD_LINE}"
     full = head + "".join(f"\n\n## {areas.rel(cfg, path)}\n\n{text}" for path, text in zip(paths, contents))
     over_limit = len(full) > CONTEXT_LIMIT
     if cfg.start.inject and not over_budget and not over_limit:
-        return Composed(text=full, tokens=tokens, over_budget=False, files=measured)
+        return Composed(text=full, tokens=tokens, over_budget=False, files=measured, others=names)
 
     if cfg.start.inject and not over_budget and over_limit:
         # The content of the first files, as far as the limit lets, then the list of the rest.
@@ -102,18 +130,19 @@ def compose(cfg: Config) -> Composed:
                          f"{CONTEXT_LIMIT} characters from a hook, so the rest comes through your reads.")
             text = "\n".join(lines)
             if len(text) <= CONTEXT_LIMIT:
-                return Composed(text=text, tokens=tokens, over_budget=False, files=measured, over_limit=True)
+                return Composed(text=text, tokens=tokens, over_budget=False, files=measured, over_limit=True,
+                                others=names)
 
     lines = [head, "Read these files now, in this order:"]
     lines += [f"- {areas.rel(cfg, path)}, about {n} tokens" for path, n in measured]
     if over_budget:
-        lines.append(f"These files have about {tokens} tokens, over the budget of {cfg.start.budget} in atlasmd.toml. "
+        lines.append(f"These files have about {tokens:,} tokens, over the budget of {cfg.start.budget:,} in atlasmd.toml. "
                      "Move what is not needed at every start out of docs/start/.")
     elif cfg.start.inject:
         lines.append(f"These files have {len(full)} characters, and Claude Code takes at most {CONTEXT_LIMIT} "
                      "characters from a hook, so you get this list and read the files.")
     return Composed(text="\n".join(lines), tokens=tokens, over_budget=over_budget, files=measured,
-                    over_limit=over_limit)
+                    over_limit=over_limit, others=names)
 
 
 def compose_map(cfg: Config) -> str:

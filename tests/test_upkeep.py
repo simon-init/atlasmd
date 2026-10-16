@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,10 +52,10 @@ class Case(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        old = os.environ.get("CLAUDE_PLUGIN_DATA")
-        os.environ["CLAUDE_PLUGIN_DATA"] = str(Path(self.tmp.name) / "data")
-        self.addCleanup(lambda: os.environ.__setitem__("CLAUDE_PLUGIN_DATA", old) if old is not None
-                        else os.environ.pop("CLAUDE_PLUGIN_DATA", None))
+        old = os.environ.get("ATLASMD_DATA")
+        os.environ["ATLASMD_DATA"] = str(Path(self.tmp.name) / "data")
+        self.addCleanup(lambda: os.environ.__setitem__("ATLASMD_DATA", old) if old is not None
+                        else os.environ.pop("ATLASMD_DATA", None))
         self.root = Path(self.tmp.name).resolve() / "project"
         self.root.mkdir()
         git(self.root, "init", "-q")
@@ -374,10 +375,10 @@ class Area(Case):
 
 class Init(unittest.TestCase):
     def test_init_writes_the_eight_rules_and_the_check_keys(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as data:
             root = Path(tmp)
             buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
+            with contextlib.redirect_stdout(buf), mock.patch.dict(os.environ, {"ATLASMD_DATA": data}):
                 self.assertEqual(cli.main(["init"], cwd=tmp), 0)
             way = (root / "docs/start/40-way-of-work.md").read_text(encoding="utf-8")
             self.assertIn("\n## How the Markdown files live\n\n", way)

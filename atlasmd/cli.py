@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The command line of atlasmd: amd <command>.
 
-Every command except setup and config prints plain text, and Claude can run it. setup
-and config are screens and need a terminal. The launcher bin/amd runs this file.
+Every command prints plain text, and Claude can run it, except setup, config and meter
+without options: they are screens and need a terminal. The launcher bin/amd runs this file.
 """
 import datetime
 import json
@@ -17,11 +17,11 @@ if sys.path and os.path.abspath(sys.path[0] or os.curdir) == _HERE:
 elif os.path.dirname(_HERE) not in sys.path:
     sys.path.insert(0, os.path.dirname(_HERE))
 
-from atlasmd import __version__, areas, config, ledger, mapping, naming, scan, start, tui, upkeep  # noqa: E402
+from atlasmd import __version__, areas, config, ledger, mapping, meter, naming, projects, scan, start, tomledit, tui, upkeep  # noqa: E402,E501
 
 COMMANDS = [
     ("setup", "set up atlasmd on a screen with five steps"),
-    ("config", "show and change atlasmd.toml and your own settings"),
+    ("config", "show and change atlasmd.toml of each repository"),
     ("scan", "list every Markdown file with its size in tokens"),
     ("init", "write atlasmd.toml and docs/start/, overwrite nothing"),
     ("check", "find problems in docs/, atlasmd.toml and the folders"),
@@ -30,6 +30,8 @@ COMMANDS = [
     ("status", "show what this session read, and the last compaction"),
     ("why", "show the last edit that the hook refused, and why"),
     ("end", "show what is not committed or not pushed"),
+    ("meter", "show the tokens of each session, atlasmd on and off"),
+    ("statusline", "print one line for the status line of Claude Code"),
     ("set <key> <value>", "write offer_setup or token_chars to your settings"),
     ("version", "print the version of atlasmd"),
 ]
@@ -42,6 +44,13 @@ OPTIONS = [
     ("status --session <id>", "the files that one session read"),
     ("status --agent <id>", "the files that a subagent of that session read"),
     ("why --session <id>", "the last refused edit of one session"),
+    ("config --list", "the table of your repositories"),
+    ("config --set <path> <key> <value>", "write one key into atlasmd.toml there:"),
+    ("", "group, guard.mode, start.inject or start.budget"),
+    ("config --json", "the table as JSON, for a skill"),
+    ("meter --list", "the same as the screen, as text"),
+    ("meter --compare <id> <id>", "compare two sessions"),
+    ("meter --json", "the records of this repository as JSON"),
 ]
 ABOUT = ("atlasmd tells Claude which Markdown files to read at the start of a session, and refuses a change "
          "to a file in a listed folder until Claude has read the files listed for that folder.")
@@ -272,9 +281,13 @@ def cmd_help():
     for name, text in COMMANDS:
         out(f"  {tui.paint(('amd ' + name).ljust(width), 'bold', c)}  {text}")
     out()
-    width = max(len("amd " + name) for name, _ in OPTIONS)
+    width = max(len("amd " + name) for name, _ in OPTIONS if len(name) <= 26)
     for name, text in OPTIONS:
-        out(f"  {('amd ' + name).ljust(width)}  {text}")
+        label = ("amd " + name) if name else ""
+        if len(label) > width:
+            out(f"  {label}")
+            label = ""
+        out(f"  {label.ljust(width)}  {text}")
     out()
     out("  The skills in a Claude Code session:")
     out("  /amd:init  /amd:check  /amd:map  /amd:area  /amd:status  /amd:why  /amd:end")
@@ -339,6 +352,31 @@ def exclude_file(root):
         return Path(out_.strip())
     git_dir = Path(root) / ".git"
     return git_dir / "info" / "exclude" if git_dir.is_dir() else None
+
+
+EXCLUDE_HEAD = "# atlasmd: the files under [private] in atlasmd.toml"
+
+
+def append_exclude(root, lines):
+    """Add lines to .git/info/exclude of the repository of root, under the comment line of atlasmd."""
+    exclude = exclude_file(root)
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    before = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+    with open(exclude, "a", encoding="utf-8", newline="\n") as fh:
+        if before and not before.endswith("\n"):
+            fh.write("\n")
+        fh.write(("" if EXCLUDE_HEAD in before.splitlines() else EXCLUDE_HEAD + "\n") + "\n".join(lines) + "\n")
+
+
+def remove_exclude(root, line):
+    """Remove one line from .git/info/exclude of the repository of root."""
+    exclude = exclude_file(root)
+    if exclude is None or not exclude.is_file():
+        return
+    lines = exclude.read_text(encoding="utf-8").splitlines()
+    if line in lines:
+        with open(exclude, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("".join(f"{x}\n" for x in lines if x != line))
 
 
 def cmd_init(cwd, args):
@@ -424,13 +462,8 @@ def cmd_init(cwd, args):
                 with open(path, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(text)
         if exclude_add:
-            exclude = exclude_file(root)
-            exclude.parent.mkdir(parents=True, exist_ok=True)
-            before = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
-            with open(exclude, "a", encoding="utf-8", newline="\n") as fh:
-                if before and not before.endswith("\n"):
-                    fh.write("\n")
-                fh.write("# atlasmd: the files under [private] in atlasmd.toml\n" + "\n".join(exclude_add) + "\n")
+            append_exclude(root, exclude_add)
+        register(root, cfg.group)
 
     out(f"atlasmd init  {root}" + ("  (dry run: nothing written)" if dry else ""))
     out()
@@ -514,7 +547,7 @@ def run_check(cfg):
     budget = {"tokens": composed.tokens, "budget": cfg.start.budget, "over": composed.over_budget,
               "chars": chars, "char_limit": start.CONTEXT_LIMIT, "over_limit": bool(composed.over_limit),
               "inject": cfg.start.inject, "given": given,
-              "files": [{"path": rel(root, p), "tokens": t} for p, t in composed.files]}
+              "files": [{"path": areas.rel(cfg, p), "tokens": t} for p, t in composed.files]}
     if not composed.files and not cfg.start.also:
         where = "none of the files in start.files exists" if cfg.start.files else f"{cfg.start.dir}/ has no Markdown files"
         add("start", f"{where}, so Claude gets nothing at the start of a session. "
@@ -555,7 +588,9 @@ def run_check(cfg):
         for block in mapping.stale(cfg, files):
             what = "table of the [[area]] entries" if block == "areas" else "list of the Markdown files"
             add("map", f"the {what} in {cfg.start.map} is out of date. Run amd map.", cfg.start.map)
-    return {"root": str(root), "ok": not findings, "problems": len(findings), "budget": budget, "findings": findings,
+    group = {"name": cfg.group, "repositories": composed.others}
+    return {"root": str(root), "ok": not findings, "problems": len(findings), "budget": budget, "group": group,
+            "findings": findings,
             "checks": [{"section": s, "kind": k, "good": g} for s, k, g in checks]}
 
 
@@ -622,6 +657,15 @@ def cmd_check(cwd, args):
                     out("    So the hook gives Claude the list of the files, and Claude reads each file with one Read.")
             for f in hits:
                 out(f"{mark(False)} {section.ljust(label_w)}  {f['text']}")
+            others = result["group"]["repositories"]
+            if cfg.group and others:
+                names = others[0] if len(others) == 1 else ", ".join(others[:-1]) + " and " + others[-1]
+                its = "its" if len(others) == 1 else "their"
+                out(f"{mark(True)} {'group'.ljust(label_w)}  \"{cfg.group}\": {names}. Claude gets the files of "
+                    f"{its} docs/start/ after the files of this repository, each file once.")
+            elif cfg.group:
+                out(f"{mark(True)} {'group'.ljust(label_w)}  \"{cfg.group}\" has no other repository on this machine. "
+                    "amd config --list shows the repositories that atlasmd knows.")
             continue
         if section in ("growth", "cleaning"):
             ran = [c for c in result["checks"] if c["section"] == section]
@@ -987,12 +1031,259 @@ def cmd_set(cwd, args):
     return 0
 
 
+# ---------------------------------------------------------------- the list of repositories
+SET_KEYS = {"group": ("", "group"), "guard.mode": ("guard", "mode"), "start.inject": ("start", "inject"),
+            "start.budget": ("start", "budget")}
+
+
+def tilde(path):
+    """The path with ~ for the home folder."""
+    text, home = str(path), str(Path.home())
+    return "~" + text[len(home):] if text == home or text.startswith(home + os.sep) else text
+
+
+def register(root, group):
+    """Write or refresh the entry of a repository in the list. A failure here stops no command."""
+    try:
+        projects.touch(root, group)
+    except OSError:
+        pass
+
+
+def register_here(cwd):
+    path = config.find(cwd)
+    if path is not None:
+        try:
+            register(path.parent, config.load(path).group)
+        except config.ConfigError:
+            pass
+
+
+def repository_info(entry):
+    """The row of one repository of the list: the values of its atlasmd.toml and the counts of its files."""
+    root = Path(entry["path"])
+    info = {"name": entry["name"], "path": str(root), "seen": entry.get("seen", ""), "group": entry.get("group", ""),
+            "error": None}
+    toml = root / config.CONFIG_NAME
+    if not root.is_dir():
+        info["error"] = "the folder does not exist"
+        return info
+    if not toml.is_file():
+        info["error"] = "no atlasmd.toml"
+        return info
+    try:
+        cfg = config.load(toml)
+    except config.ConfigError as exc:
+        info["error"] = str(exc)
+        return info
+    own = start.own_files(cfg)
+    token_chars = config.personal()["token_chars"]
+    info.update({"group": cfg.group, "guard_mode": cfg.guard.mode, "start_inject": cfg.start.inject,
+                 "start_budget": cfg.start.budget, "start_files": len(own),
+                 "start_tokens": sum(start.estimate_tokens(scan.read_text(p).rstrip(), token_chars) for p in own),
+                 "markdown_files": len(scan.markdown_files(root))})
+    return info
+
+
+REPO_HEAD = ("repository", "path", "group", "guard.mode", "start.inject", "start.budget", "docs/start/", "tokens",
+             "Markdown files")
+REPO_RIGHT = (False, False, False, False, False, True, True, True, True)
+
+
+def repository_cells(info, values=None):
+    """The cells of one row of the table. values are the values on the screen, before a save."""
+    if info["error"]:
+        return (info["name"], tilde(info["path"]), "", "", "", "", "", "", "")
+    v = values or {}
+    group = v.get(("", "group"), info["group"])
+    inject = v.get(("start", "inject"), info["start_inject"])
+    return (info["name"], tilde(info["path"]), group or "none", v.get(("guard", "mode"), info["guard_mode"]),
+            "true" if inject else "false", number(v.get(("start", "budget"), info["start_budget"])),
+            number(info["start_files"]), number(info["start_tokens"]), number(info["markdown_files"]))
+
+
+def write_values(path, changes):
+    """Write values into an atlasmd.toml, each key in its place, and keep every other line. Problem when the
+    result is not valid: then nothing is written. Returns the configuration as written."""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
+    for (table, key), value in changes.items():
+        text = tomledit.set_value(text, table, key, value)
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / config.CONFIG_NAME
+        probe.write_text(text, encoding="utf-8")
+        try:
+            config.load(probe)
+        except config.ConfigError as exc:
+            raise Problem(f"Not saved: {exc}")
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+    cfg = config.load(path)
+    register(cfg.root, cfg.group)
+    return cfg
+
+
+def parse_value(key, text):
+    """The value of one key of amd config --set, from its text."""
+    value = str(text).strip()
+    if key == "group":
+        if not config.GROUP_NAME.match(value):
+            raise Problem(f"A group name is letters, digits and hyphens, for example my-project. {value} is not one.")
+        return value
+    if key == "guard.mode":
+        if value not in config.GUARD_MODES:
+            raise Problem(f"guard.mode is deny, remind or off, not {value}.")
+        return value
+    if key == "start.inject":
+        if value.lower() in ("true", "yes", "on"):
+            return True
+        if value.lower() in ("false", "no", "off"):
+            return False
+        raise Problem(f"start.inject is true or false, not {value}.")
+    try:
+        number_ = int(value.replace(",", "").replace("_", ""))
+    except ValueError:
+        number_ = 0
+    if number_ <= 0:
+        raise Problem(f"start.budget is a whole number above 0, for example 30000, not {value}.")
+    return number_
+
+
+def find_repository(cwd, ident):
+    """The folder of atlasmd.toml for a path or for the name of a repository of the list."""
+    target = Path(os.path.expanduser(ident))
+    target = Path(os.path.abspath(target if target.is_absolute() else Path(cwd) / target))
+    if (target / config.CONFIG_NAME).is_file():
+        return target
+    for entry in projects.load():
+        if entry["name"] == ident and (Path(entry["path"]) / config.CONFIG_NAME).is_file():
+            return Path(entry["path"])
+    raise Problem(f"{ident} is not a folder with atlasmd.toml, and no repository of the list has this name. "
+                  "amd config --list shows the list.")
+
+
+def toggle_private(cfg, rel_path):
+    """Add a file to [private] files of atlasmd.toml and to .git/info/exclude, or remove it from both.
+    Returns the sentence for the person."""
+    rel_path = rel_path.strip("/")
+    adding = rel_path not in cfg.private
+    files = cfg.private + [rel_path] if adding else [p for p in cfg.private if p != rel_path]
+    write_values(cfg.path, {("private", "files"): files})
+    top, exclude = scan.git_root(cfg.root), exclude_file(cfg.root)
+    if top is None or exclude is None:
+        return (f"{rel_path} is in [private] files now. This folder is not in a git repository, so there is no "
+                ".git/info/exclude to write." if adding else f"{rel_path} left [private] files.")
+    line = "/" + rel(top, cfg.root / rel_path)
+    if not adding:
+        remove_exclude(cfg.root, line)
+        return f"{rel_path} left [private] files and .git/info/exclude. git can commit it again."
+    present = set(exclude.read_text(encoding="utf-8").splitlines()) if exclude.is_file() else set()
+    if line not in present:
+        append_exclude(cfg.root, [line])
+    text = f"{rel_path} is in [private] files and in .git/info/exclude, so git does not commit it."
+    if scan.git(cfg.root, "ls-files", "--error-unmatch", "--", rel_path) is not None:
+        text += f" But git tracks it already, and .git/info/exclude does not change that: git rm --cached {rel_path}"
+    return text
+
+
+def cmd_config(cwd, args):
+    if args and args[0] == "--set":
+        if len(args) != 4:
+            raise Problem("amd config --set takes a repository, a key and a value, for example: "
+                          "amd config --set . group my-project. The keys are " + ", ".join(SET_KEYS) + ".")
+        _, ident, key, text = args
+        if key not in SET_KEYS:
+            raise Problem(f"amd config --set writes {', '.join(SET_KEYS)}. {key} is not one of them.")
+        root = find_repository(cwd, ident)
+        value = parse_value(key, text)
+        cfg = write_values(root / config.CONFIG_NAME, {SET_KEYS[key]: value})
+        out(f"{cfg.root.name}: {key} = {tomledit.literal(value)} in {tilde(cfg.path)}")
+        return 0
+    opts, _ = parse(args, flags=("--list", "--json"))
+    register_here(cwd)
+    if not (opts.get("--list") or opts.get("--json")):
+        return cmd_screen("config")
+    infos = [repository_info(e) for e in projects.load()]
+    if opts.get("--json"):
+        out(json.dumps({"list": str(projects.path()), "repositories": infos}, indent=2, ensure_ascii=False))
+        return 0
+    out(f"atlasmd config  {len(infos)} repositor{'y' if len(infos) == 1 else 'ies'} in {tilde(projects.path())}")
+    out()
+    if not infos:
+        out("atlasmd knows no repository yet. amd init, amd config and the hook at a session start add the "
+            "repository where they run.")
+        return 0
+    for line in meter.table(REPO_HEAD, [repository_cells(i) for i in infos], REPO_RIGHT):
+        out(line)
+    bad = [i for i in infos if i["error"]]
+    if bad:
+        out()
+        for i in bad:
+            out(f"{i['name']}: {i['error']}")
+    return 0
+
+
+# ---------------------------------------------------------------- meter
+def cmd_meter(cwd, args):
+    compare = None
+    if args and args[0] == "--compare":
+        if len(args) != 3:
+            raise Problem("amd meter --compare takes two sessions, for example: amd meter --compare 8a005778 713f1146. "
+                          "amd meter --list shows the sessions.")
+        compare, args = args[1:], []
+    opts, _ = parse(args, flags=("--list", "--json"))
+    cfg = load_config(cwd)
+    if compare:
+        everything = meter.records()
+        pair = []
+        for ident in compare:
+            record = meter.pick(everything, ident)
+            if record is None:
+                raise Problem(f"No session or more than one starts with {ident}. amd meter --list shows the sessions.")
+            pair.append(meter.refresh(record))
+        out("atlasmd meter  compare two sessions")
+        out()
+        for line in meter.render_compare(*pair):
+            out(line)
+        return 0
+    found = [meter.refresh(r) for r in meter.records(cfg.root)]
+    if opts.get("--json"):
+        out(json.dumps({"root": str(cfg.root), "sessions": [meter.summary(r) for r in found]}, indent=2,
+                       ensure_ascii=False))
+        return 0
+    if opts.get("--list") or not found:
+        out("\n".join(meter.render(cfg.root, found, cfg.start.budget, color())))
+        return 0
+    return cmd_screen("meter", cfg=cfg, found=found)
+
+
+def cmd_statusline(cwd, args):
+    """One line for the status line of Claude Code. It never fails: the status line shows what it prints."""
+    try:
+        raw = sys.stdin.read()
+        data = json.loads(raw) if raw.strip() else {}
+        data = data if isinstance(data, dict) else {}
+        session = data.get("session_id")
+        record = meter.load(session) if session else None
+        size = (data.get("context_window") or {}).get("context_window_size")
+        if record is not None:
+            record = meter.refresh(record, size if isinstance(size, int) and size > 0 else None)
+            out(meter.status_line(record, "NO_COLOR" not in os.environ))
+        elif config.find(data.get("cwd") or cwd) is None:
+            out(f"atlasmd · no atlasmd.toml in {Path(data.get('cwd') or cwd).name}")
+        else:
+            out(meter.status_line(None, "NO_COLOR" not in os.environ))
+    except Exception:  # noqa: BLE001  a status line prints, it never shows a traceback
+        out("atlasmd")
+    return 0
+
+
 # ---------------------------------------------------------------- screens
-def cmd_screen(name):
+def cmd_screen(name, cfg=None, found=None):
     try:
         import curses  # noqa: F401
     except ImportError as exc:
-        out(f"amd setup and amd config need the curses module, and this Python has none ({exc}).")
+        out(f"amd setup, amd config and amd meter need the curses module, and this Python has none ({exc}).")
         out("On Windows, run: pip install windows-curses. Every other command of amd works without it.")
         return 2
     message = tui.needs_terminal(name)
@@ -1002,6 +1293,8 @@ def cmd_screen(name):
     if name == "setup":
         from atlasmd import setup
         return setup.run()
+    if name == "meter":
+        return meter.run(cfg.root, found, cfg.start.budget)
     from atlasmd import screen
     return screen.run()
 
@@ -1021,11 +1314,12 @@ def main(argv=None, cwd=None):
     cmd, args = argv[0], argv[1:]
     handlers = {"scan": cmd_scan, "init": cmd_init, "check": cmd_check, "map": cmd_map, "area": cmd_area,
                 "status": cmd_status,
-                "why": cmd_why, "end": cmd_end, "set": cmd_set}
+                "why": cmd_why, "end": cmd_end, "set": cmd_set, "config": cmd_config, "meter": cmd_meter,
+                "statusline": cmd_statusline}
     try:
         if cmd in handlers:
             return handlers[cmd](cwd, args)
-        if cmd in ("setup", "config"):
+        if cmd == "setup":
             parse(args)
             return cmd_screen(cmd)
         if cmd in ("version", "--version"):

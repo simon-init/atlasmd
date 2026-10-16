@@ -23,11 +23,22 @@ computer through the plugin.
   The command line reads them on your computer and prints the result in your terminal.
 - The git log of a project, when you run `amd check`: the last commit of a README.md,
   of a note and of the file in `start.state`, and the number of commits after it.
+- The transcript of a session, the JSONL file that Claude Code writes under
+  `~/.claude/projects/`, at every hook event and when you run `amd meter` or
+  `amd statusline`. The meter reads only the lines that the file got after the last
+  read. From these lines it takes the token counts, the model, the compaction lines and
+  the names of the tools. It does not keep the text of a message.
+- `atlasmd.toml` of every repository of the list, at a session start in a repository with
+  a group and when you run `amd config`. With a group, the files of `docs/start/` of the
+  other repositories go into the context of the session. They go there as the files of
+  the repository itself do.
+- The JSON that Claude Code gives a status line command, when you use `amd statusline`.
+  It takes the session id, the transcript path and the size of the context window.
 
 ## What it keeps
 
 All files are under `~/.claude/plugins/data/amd/`, or under the folder that
-`CLAUDE_PLUGIN_DATA` names:
+`ATLASMD_DATA` names:
 
 - `ledgers/`: one small file for each session and each subagent. It holds the paths of
   the files that the session read on this computer, the text of the last 10 refused
@@ -39,6 +50,14 @@ All files are under `~/.claude/plugins/data/amd/`, or under the folder that
 - `settings.toml`: your two settings, `offer_setup` and `token_chars`.
 - `seen.json`: the project folders where the hook already told Claude about
   `/amd:init`.
+- `projects.toml`: the list of the repositories that atlasmd knows, with the path, the
+  name of the folder, the group and the time of the last session start there.
+- `meter/`: one small file for each session in a repository with `atlasmd.toml`. It
+  holds no text of the session, only token counts and times. These are the repository
+  and its group, whether atlasmd was on, the time of the first request and the model.
+  Then the four token counts, the number of requests, the tokens up to the first Edit
+  or Write, and the counts of each compaction cycle. Last, the byte offset of the last
+  read and the ids of the last few requests. The plugin does not remove these files.
 - `log.txt`: the internal errors of the hook, if there are errors.
 
 You own these files. To remove all of them, delete the folder.

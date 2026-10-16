@@ -69,8 +69,8 @@ class HookCase(unittest.TestCase):
         self._tmp.cleanup()
 
     def env(self, **extra):
-        env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE")}
-        env["CLAUDE_PLUGIN_DATA"] = str(self.data)
+        env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ATLASMD"))}
+        env["ATLASMD_DATA"] = str(self.data)
         env.update(extra)
         return env
 
@@ -478,14 +478,14 @@ class _data:
         self.folder = str(folder)
 
     def __enter__(self):
-        self.old = os.environ.get("CLAUDE_PLUGIN_DATA")
-        os.environ["CLAUDE_PLUGIN_DATA"] = self.folder
+        self.old = os.environ.get("ATLASMD_DATA")
+        os.environ["ATLASMD_DATA"] = self.folder
 
     def __exit__(self, *exc):
         if self.old is None:
-            os.environ.pop("CLAUDE_PLUGIN_DATA", None)
+            os.environ.pop("ATLASMD_DATA", None)
         else:
-            os.environ["CLAUDE_PLUGIN_DATA"] = self.old
+            os.environ["ATLASMD_DATA"] = self.old
 
 
 class BashForms(unittest.TestCase):

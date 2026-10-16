@@ -130,14 +130,14 @@ class Find(Case):
 
 class Personal(unittest.TestCase):
     def test_the_personal_settings(self):
-        old = {k: os.environ.pop(k, None) for k in ("CLAUDE_PLUGIN_DATA", "CLAUDE_PLUGIN_OPTION_OFFER_SETUP")}
+        old = {k: os.environ.pop(k, None) for k in ("ATLASMD_DATA", "CLAUDE_PLUGIN_OPTION_OFFER_SETUP")}
         try:
             mine = config.personal()
             self.assertTrue(mine["offer_setup"])
             self.assertEqual(mine["data_dir"], pathlib.Path.home() / ".claude" / "plugins" / "data" / "amd")
             self.assertEqual(mine["token_chars"], 2.5)
             os.environ["CLAUDE_PLUGIN_OPTION_OFFER_SETUP"] = "false"
-            os.environ["CLAUDE_PLUGIN_DATA"] = "/data/amd"
+            os.environ["ATLASMD_DATA"] = "/data/amd"
             mine = config.personal()
             self.assertFalse(mine["offer_setup"])
             self.assertEqual(mine["data_dir"], pathlib.Path("/data/amd"))

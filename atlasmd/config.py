@@ -20,6 +20,8 @@ DEFAULT_NAMING = {
 }
 
 GUARD_MODES = ("deny", "remind", "off")
+GROUP_NAME = re.compile(r"^[A-Za-z0-9-]*$")
+OFF_VALUES = ("off", "false", "0", "no")
 NEW_FOLDERS = ("remind", "off")
 AGENT_INJECT = ("map", "start", "none")
 
@@ -75,6 +77,7 @@ class Area:
 class Config:
     root: pathlib.Path
     path: pathlib.Path
+    group: str = ""
     start: Start = field(default_factory=Start)
     guard: Guard = field(default_factory=Guard)
     agents: Agents = field(default_factory=Agents)
@@ -109,14 +112,28 @@ def find(path: str | os.PathLike) -> pathlib.Path | None:
     return None
 
 
+def data_dir() -> pathlib.Path:
+    """The folder of the files that atlasmd keeps: ~/.claude/plugins/data/amd, or the folder in ATLASMD_DATA.
+
+    Not CLAUDE_PLUGIN_DATA: Claude Code gives the hook ~/.claude/plugins/data/amd-<marketplace>, but not
+    the command line, the status line or a Bash command. One fixed folder lets all of them read the same files.
+    """
+    data = os.environ.get("ATLASMD_DATA")
+    return pathlib.Path(data) if data else pathlib.Path.home() / ".claude" / "plugins" / "data" / "amd"
+
+
+def atlasmd_off() -> bool:
+    """True when the session runs with ATLASMD=off: the hook gives nothing and refuses nothing."""
+    return os.environ.get("ATLASMD", "").strip().lower() in OFF_VALUES
+
+
 def personal() -> dict:
     """The settings of the person, not of the project: settings.toml under the data folder, which
     `amd set` writes, and the environment of the hook, which wins for offer_setup."""
-    data = os.environ.get("CLAUDE_PLUGIN_DATA")
-    data_dir = pathlib.Path(data) if data else pathlib.Path.home() / ".claude" / "plugins" / "data" / "amd"
+    data_dir_ = data_dir()
     offer, token_chars = True, 2.5
     try:
-        with open(data_dir / "settings.toml", "rb") as handle:
+        with open(data_dir_ / "settings.toml", "rb") as handle:
             stored = tomllib.load(handle)
         if isinstance(stored.get("offer_setup"), bool):
             offer = stored["offer_setup"]
@@ -128,7 +145,7 @@ def personal() -> dict:
     value = os.environ.get("CLAUDE_PLUGIN_OPTION_OFFER_SETUP")
     if value is not None:
         offer = value.strip().lower() not in ("false", "0", "no", "off", "")
-    return {"offer_setup": offer, "data_dir": data_dir, "token_chars": token_chars}
+    return {"offer_setup": offer, "data_dir": data_dir_, "token_chars": token_chars}
 
 
 # --- loading -----------------------------------------------------------------------------------
@@ -218,10 +235,15 @@ def load(config_path: str | os.PathLike) -> Config:
         raise ConfigError(f"atlasmd cannot read {path}: {exc}.") from None
 
     for name in data:
-        if name not in _KEYS:
+        if name not in _KEYS and name != "group":
             raise ConfigError(f"In {CONFIG_NAME}, the table [{name}] is not known.")
 
     cfg = Config(root=path.parent, path=path)
+    if "group" in data:
+        group = _string(data["group"], "group").strip()
+        if not GROUP_NAME.match(group):
+            raise ConfigError(f"In {CONFIG_NAME}, group must be letters, digits and hyphens, not \"{group}\".")
+        cfg.group = group
 
     table = _table(data, "start")
     start = cfg.start
@@ -310,6 +332,8 @@ def defaults_text() -> str:
 
 _DEFAULTS_TEXT = r'''# The settings of atlasmd for this project.
 # Every path is relative to the folder of this file, with / as the separator.
+
+# group = "my-project"   # repositories with the same group name share their docs/start/ at a session's start
 
 [start]
 # The Markdown files that Claude gets at the start of a session and after each compaction.

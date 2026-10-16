@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """The entry of every hook of atlasmd. Claude Code runs it at SessionStart, SubagentStart, PreToolUse,
-PostToolUse and PostCompact. It prints one JSON answer or nothing.
+PostToolUse and PostCompact. It prints one JSON answer or nothing. At every event it also adds the new
+lines of the transcript to the meter record of the session. With ATLASMD=off in the environment, it only
+does that.
 
 It never breaks a tool call: on an internal error it writes the error into <data>/log.txt,
 prints nothing and exits 0. The manifest runs `python3 ... || python ...`, so a non-zero exit
@@ -18,7 +20,7 @@ LOG_LIMIT = 256 * 1024
 
 
 def _data_dir() -> str:
-    data = os.environ.get("CLAUDE_PLUGIN_DATA")
+    data = os.environ.get("ATLASMD_DATA")  # the same folder as config.data_dir()
     return data or os.path.join(os.path.expanduser("~"), ".claude", "plugins", "data", "amd")
 
 
@@ -70,28 +72,56 @@ def _broken(event: str, error: Exception) -> dict | None:
     return _context(event, f"atlasmd: {error} Until atlasmd.toml is correct, nothing is read at the start and no edit is refused.")
 
 
-def session_start(data: dict) -> dict | None:
+def _meter(event: str, data: dict, on: bool, given: int | None = None) -> None:
+    """Add the new lines of the transcript to the record of the session. A failure here is logged and
+    changes no answer of the hook."""
+    try:
+        from atlasmd import meter
+        meter.update(data, on, given)
+    except Exception as error:
+        log(event, f"meter: {type(error).__name__}: {error}")
+
+
+def _register(event: str, cfg) -> None:
+    try:
+        from atlasmd import projects
+        projects.touch(cfg.root, cfg.group, started=True)
+    except Exception as error:
+        log(event, f"projects: {type(error).__name__}: {error}")
+
+
+def session_start(data: dict, on: bool = True) -> dict | None:
+    answer, given = _session_start(data, on)
+    _meter("SessionStart", data, on, given)
+    return answer
+
+
+def _session_start(data: dict, on: bool) -> tuple[dict | None, int | None]:
+    """The answer at a session start, and the estimated tokens of the files that it gives."""
     from atlasmd import config, ledger, start
     cwd = data.get("cwd") or os.getcwd()
     found = config.find(cwd)
     if found is None:
-        return _context("SessionStart", _offer(cwd))
+        return (_context("SessionStart", _offer(cwd)) if on else None), None
     try:
         cfg = config.load(found)
     except config.ConfigError as error:
-        return _broken("SessionStart", error)
+        return (_broken("SessionStart", error) if on else None), None
+    _register("SessionStart", cfg)
     source = data.get("source") or "startup"
+    if not on:
+        return None, 0
     if source == "compact":
         ledger.clear_session(data.get("session_id"))
     composed = start.compose(cfg)
     if not composed.files:
-        return None
+        return None, 0
     if source in ("resume", "fork"):
         count = len(composed.files)
         files = "Markdown file" if count == 1 else "Markdown files"
         return _context("SessionStart", f"atlasmd gave this session {count} {files} at its start, about "
-                                        f"{composed.tokens} tokens. They are in the context.")
-    return _context("SessionStart", composed.text)
+                                        f"{composed.tokens} tokens. They are in the context."), None
+    return _context("SessionStart", composed.text), composed.tokens
 
 
 def subagent_start(data: dict) -> dict | None:
@@ -168,7 +198,15 @@ def main() -> int:
         handler = HANDLERS.get(event)
         if handler is None:
             return 0
-        from atlasmd import ledger
+        from atlasmd import config, ledger
+        if config.atlasmd_off():  # ATLASMD=off: no start reading, no refusal, no reminder, no offer. The meter records.
+            if event == "SessionStart":
+                session_start(data, on=False)
+            else:
+                _meter(event, data, on=False)
+            return 0
+        if event != "SessionStart":
+            _meter(event, data, on=True)
         try:
             ledger.prune()
         except Exception as error:

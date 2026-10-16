@@ -1,5 +1,22 @@
 # Changes
 
+## 0.3.0
+
+2026-10-16.
+
+- The new top-level key `group` in `atlasmd.toml`. `amd init` writes it as a comment. Repositories with the same group name share their `docs/start/` at the start of a session.
+- atlasmd keeps the list of the repositories that it knows in `projects.toml` in its data folder. `amd init` and `amd config` add the repository where they run, and the hook adds or refreshes it at every session start. An entry whose folder does not exist leaves the list at the next write.
+- At a session start in a repository with a group, Claude gets the files of this repository first. Then Claude gets the files of `start.dir` or `start.files` of each other repository of the group, in the order of their names, each file once. The first line names the group and the number of the other repositories.
+- `amd check` prints one line for the group: the repositories that it found, or that the group has no other repository on this machine. Its list of the files at the start shows the files of the group with their paths from the repository.
+- `amd config` has three stations: Repositories, the settings of one repository, and Files. On Repositories, `g`, `m`, `i` and `b` change the group, `guard.mode`, `start.inject` and `start.budget` of a row. On Files, `p` adds a Markdown file to `[private] files` and to `.git/info/exclude`, or removes it from both.
+- `amd config --list`, `amd config --set <path> <key> <value>` and `amd config --json`. A write changes the key in its place. It uncomments a key that stands as a comment, and it adds a missing key at the end of its table. Every other line and comment stays.
+- The meter: at every hook event, the hook reads the new lines of the transcript of the session. It writes one record per session in `meter/` of its data folder. The record holds the four token counts, the requests, the tokens up to the first Edit or Write, the compaction cycles and the model.
+- `amd meter` shows the newest session of a repository with two bars, and the history of its sessions. Enter on two rows, or `c` on one row, shows the comparison: off, on, the difference and the percent saved. `--list`, `--compare` and `--json` print the same without the screen.
+- `amd statusline` prints one line for the status line of Claude Code: on or off, the start tokens, the session tokens and the compactions.
+- `ATLASMD=off claude` starts a session where the hook gives nothing, refuses nothing and reminds of nothing. The meter records the session, marked off.
+- The data folder of atlasmd is always `~/.claude/plugins/data/amd/`, or the folder in `ATLASMD_DATA`. Before, the hook used `CLAUDE_PLUGIN_DATA`, which Claude Code sets to `~/.claude/plugins/data/amd-atlasmd/` for the hook only. So the command line, the status line and a Bash command read another folder than the hook wrote.
+- The first line of the files at the start, and the warning over the budget, show the tokens with thousands separators.
+
 ## 0.2.0
 
 2026-10-16.
