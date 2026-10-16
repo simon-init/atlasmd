@@ -1,0 +1,31 @@
+name: tests
+
+# `claude plugin validate --strict` needs Claude Code, which this runner does not have.
+# Run it by hand before a release: claude plugin validate --strict .
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: macos-latest, python: "3.13" }
+          - { os: windows-latest, python: "3.13" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: git identity for the test repositories
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+      - name: unit tests
+        run: python -m unittest discover -s tests -v
