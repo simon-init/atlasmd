@@ -1,4 +1,4 @@
-"""What a session and an agent read, the refusals, and the compaction log.
+"""What a session and an agent read, the refusals, the folders it was told about, and the compaction log.
 
 Every file lives under the data folder of the plugin (CLAUDE_PLUGIN_DATA). A ledger is one small
 JSON file per key. A lock file keeps two hooks that run at the same time from losing a read.
@@ -88,11 +88,12 @@ def _load(path: pathlib.Path, key: str) -> dict:
         if isinstance(data, dict):
             data.setdefault("paths", [])
             data.setdefault("refusals", [])
+            data.setdefault("reminded", [])
             return data
     except (FileNotFoundError, ValueError):
         pass
     session, agent = _split(key)
-    return {"session_id": session, "agent_id": agent, "paths": [], "refusals": []}
+    return {"session_id": session, "agent_id": agent, "paths": [], "refusals": [], "reminded": []}
 
 
 def _save(path: pathlib.Path, data: dict) -> None:
@@ -159,6 +160,21 @@ def record_refusal(key: str, text: str) -> None:
 def last_refusal(key: str) -> str | None:
     refusals = _load(_file(key), key)["refusals"]
     return refusals[-1]["text"] if refusals else None
+
+
+def reminded(key: str) -> list[str]:
+    """The folders without an [[area]] entry that the hook already named to this key, in the form of config.norm."""
+    return list(_load(_file(key), key)["reminded"])
+
+
+def add_reminded(key: str, abs_folder) -> None:
+    folder = norm(abs_folder)
+
+    def change(data):
+        if folder not in data["reminded"]:
+            data["reminded"].append(folder)
+
+    _change(key, change)
 
 
 def log_compact(cwd, trigger, summary_chars) -> None:

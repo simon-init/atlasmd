@@ -1,5 +1,6 @@
 """The command line of atlasmd, on a fixture repository in a temporary folder."""
 import contextlib
+import datetime
 import io
 import json
 import os
@@ -127,6 +128,7 @@ class Init(Base):
 
     def test_the_four_templates_stay_under_ten_lines_of_text(self):
         for key, text in cli.TEMPLATES.items():
+            text = text.split("## How the Markdown files live")[0]  # the eight rules of 0.2 come on top
             words = [line for line in text.splitlines() if line.strip() and not line.startswith(("|", "<!--"))]
             self.assertLessEqual(len(words), 10, key)
 
@@ -185,7 +187,7 @@ class Check(Base):
         self.assertEqual(code, 1, text)
         found = json.loads(text)
         kinds = {f["kind"] for f in found["findings"]}
-        self.assertEqual(kinds, {"missing-pack", "empty-pack", "overlap", "naming", "unread"})
+        self.assertEqual(kinds, {"missing-pack", "empty-pack", "overlap", "naming", "unread", "no-entry"})
         paths = {f["path"] for f in found["findings"]}
         self.assertIn("docs/decisions/P001-policy.md", paths)
         self.assertIn("docs/notes/a-note.md", paths)
@@ -202,7 +204,8 @@ class Check(Base):
 
         # Fix every problem, and the check passes.
         write(self.root, "docs/decisions/P001-policy.md", "# P001 The policy\n")
-        (self.root / "docs/notes/a-note.md").rename(self.root / "docs/notes/2026-10-16-a-note.md")
+        write(self.root, "docs/decisions/README.md", "# Decisions\n\n- P1 `docs/decisions/P001-policy.md` The policy\n")
+        (self.root / "docs/notes/a-note.md").rename(self.root / f"docs/notes/{datetime.date.today()}-a-note.md")
         (self.root / "docs/old-notes.md").rename(self.root / "docs/archive/old-notes.md")
         text = (self.root / "atlasmd.toml").read_text(encoding="utf-8")
         text = text.replace('name = "the core"\npaths = ["services/scrub/core/"]\npack = []',

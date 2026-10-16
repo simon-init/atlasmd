@@ -1,5 +1,27 @@
 # Changes
 
+## 0.2.0
+
+2026-10-16.
+
+- `amd init` writes the section "How the Markdown files live", with eight rules, into `docs/start/40-way-of-work.md`. It still overwrites no file.
+- `amd check` reports a folder with source files and no README.md (`no-readme`), and a folder with source files that no `[[area]]` entry lists (`no-entry`).
+- `amd check` reports a path under `paths` of an `[[area]]` entry that does not exist (`dead-entry`).
+- `amd check` reports a README.md under `pack` that did not change in the last 15 commits that changed its folder (`stale-readme`).
+- `amd check` reports a path in backticks in `docs/start/20-open-items.md` that does not exist (`dead-pointer`).
+- `amd check` reports a file in `docs/plans/` that no line of `docs/start/20-open-items.md` names (`orphan-plan`).
+- `amd check` reports a note in `docs/notes/` that no Markdown file names and that is older than 30 days (`orphan-note`).
+- `amd check` reports a file in `docs/decisions/` without a line in `docs/decisions/README.md` (`no-index-line`).
+- `amd check` reports the file in `start.state` when it did not change in the last 20 commits (`stale-state`).
+- `amd check` gives these nine findings under two headings, `growth` and `cleaning`, with one line for each check that finds nothing. `--json` gives them with their `kind` and `path`.
+- The new table `[check]` in `atlasmd.toml` has a key for each of these checks. `false` or `0` turns a check off. `amd init` writes the table with a comment on each key.
+- The new key `start.items` names the file of the open items, `docs/start/20-open-items.md` by default. The hook never refuses an edit of it.
+- The hook refuses a Write of a new Markdown file whose name breaks the rule of its folder under `[naming]`. The refusal gives the rule in words and an example name. An Edit of a file that exists is never refused for its name.
+- The new key `guard.new_folders`, `remind` by default: when Claude writes a new source file in a folder that no `[[area]]` entry lists, the hook tells Claude once in the session to write the README.md and the entry.
+- `/amd:end` runs `amd check --json` first, moves the built plans and the replaced notes to `docs/archive/` with `git mv`, corrects the open items, the index and the State sections, and tells the person what moved and what it left.
+- The command `amd area <folder>` and the skill `/amd:area` write the README.md of a folder from a template, add its `[[area]]` entry at the end of `atlasmd.toml`, and write the map file.
+- The README gives the eight rules, the keys under `[check]`, `start.items`, `guard.new_folders`, the nine findings, the refusal of a new file and `amd area`. Its example of an `[[area]]` entry, and the example in `atlasmd.toml`, use the folder `api/`.
+
 ## 0.1.2
 
 2026-10-16.

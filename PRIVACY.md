@@ -16,8 +16,13 @@ computer through the plugin.
 - `atlasmd.toml` of a project, and the paths of the files that a tool call reads or
   changes, to find the `[[area]]` whose paths hold a file.
 - The text of a Bash command, to find the files that it reads or writes.
+- Before a Write of a new file, the names of the files in its folder, to give the next
+  free number in the example of a refusal, and the folders above it, to find the first
+  new folder.
 - The Markdown files of a project, when you run `amd scan`, `amd check` or `amd map`.
   The command line reads them on your computer and prints the result in your terminal.
+- The git log of a project, when you run `amd check`: the last commit of a README.md,
+  of a note and of the file in `start.state`, and the number of commits after it.
 
 ## What it keeps
 
@@ -25,8 +30,9 @@ All files are under `~/.claude/plugins/data/amd/`, or under the folder that
 `CLAUDE_PLUGIN_DATA` names:
 
 - `ledgers/`: one small file for each session and each subagent. It holds the paths of
-  the files that the session read on this computer, and the text of the last 10 refused
-  edits. The hook removes a file after 14 days.
+  the files that the session read on this computer, the text of the last 10 refused
+  edits, and the folders without an `[[area]]` entry that the hook named to Claude. The
+  hook removes a file after 14 days.
 - `compacts.log`: one line for each compaction, with the date and time, the project
   folder, whether the compaction was manual or automatic, and the size of the summary
   in characters. It does not hold the summary.

@@ -17,15 +17,16 @@ if sys.path and os.path.abspath(sys.path[0] or os.curdir) == _HERE:
 elif os.path.dirname(_HERE) not in sys.path:
     sys.path.insert(0, os.path.dirname(_HERE))
 
-from atlasmd import __version__, areas, config, ledger, mapping, naming, scan, start, tui  # noqa: E402
+from atlasmd import __version__, areas, config, ledger, mapping, naming, scan, start, tui, upkeep  # noqa: E402
 
 COMMANDS = [
     ("setup", "set up atlasmd on a screen with five steps"),
     ("config", "show and change atlasmd.toml and your own settings"),
     ("scan", "list every Markdown file with its size in tokens"),
     ("init", "write atlasmd.toml and docs/start/, overwrite nothing"),
-    ("check", "find problems in docs/start/, atlasmd.toml, file names"),
+    ("check", "find problems in docs/, atlasmd.toml and the folders"),
     ("map", "list every Markdown file in docs/start/10-map.md"),
+    ("area <folder>", "write the README.md and the [[area]] entry of a folder"),
     ("status", "show what this session read, and the last compaction"),
     ("why", "show the last edit that the hook refused, and why"),
     ("end", "show what is not committed or not pushed"),
@@ -37,6 +38,7 @@ OPTIONS = [
     ("check --json", "the same as JSON, for a skill"),
     ("init --areas-json <file>", "add the [[area]] entries of a JSON file"),
     ("init --dry-run", "show what init writes, and write nothing"),
+    ("area --name <name>", "the name of the new [[area]] entry"),
     ("status --session <id>", "the files that one session read"),
     ("status --agent <id>", "the files that a subagent of that session read"),
     ("why --session <id>", "the last refused edit of one session"),
@@ -92,8 +94,31 @@ The rules that Claude follows in every session of this project. Keep only what e
 
 - Before you change a file in a folder that atlasmd.toml lists, read the files listed for that folder. The hook refuses the edit until you read them.
 - If a file you read changes what you planned to do, follow the file and say so in your report.
+
+## How the Markdown files live
+
+- A new folder with source files gets a README.md beside the code in the same commit. The README says what the folder holds, how to run it, and its state, with the date. The folder gets an [[area]] entry in atlasmd.toml with the README as the first file to read before a change there. Then run amd map. The command /amd:area <folder> does all three.
+- A decision is a new file in docs/decisions/ with the next number and a line in docs/decisions/README.md. A change to a decision goes into the decision's own file under a heading with the date. Never a second file for the same decision.
+- A plan is a file in docs/plans/ while the work is open, and one line in docs/start/20-open-items.md points at it. In the commit that builds the plan, the file moves to docs/archive/ with git mv, and the line leaves the open items.
+- An open item is one line in docs/start/20-open-items.md: the item, its state in one sentence, and the file that holds the detail. The line leaves in the commit that closes the item. A detail longer than three lines goes into a note in docs/notes/, and the line points at the note.
+- docs/start/30-state.md is rewritten at every ending, never appended. What is done since the last ending stands there once. At the next ending it leaves.
+- A note in docs/notes/ is named with its date first. When a newer note replaces it on the same subject, the old note moves to docs/archive/ in the same commit.
+- The State section of a README changes in the commit that changes the state, with the commit hash there and not in the open items.
+- Before an ending, run amd check and do what it says: archive the built plans, close the items, move the replaced notes. Then rewrite the state file.
 """,
 }
+AREA_README = """# {title}
+
+What this folder holds, in one or two sentences.
+
+## How to run it
+
+The commands, from the root of the repository.
+
+## State
+
+Updated {date}. What works, what does not, and the commit of the last change.
+"""
 FOLDERS = ["docs/decisions", "docs/plans", "docs/notes", "docs/archive"]
 HOST_NAMES = {"CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "SKILL.md"}
 PERSONAL_KEYS = {"offer_setup": "yes or no", "token_chars": "a number above 0, for example 2.5"}
@@ -252,7 +277,7 @@ def cmd_help():
         out(f"  {('amd ' + name).ljust(width)}  {text}")
     out()
     out("  The skills in a Claude Code session:")
-    out("  /amd:init  /amd:check  /amd:map  /amd:status  /amd:why  /amd:end")
+    out("  /amd:init  /amd:check  /amd:map  /amd:area  /amd:status  /amd:why  /amd:end")
     return 0
 
 
@@ -357,7 +382,7 @@ def cmd_init(cwd, args):
         kept.append(cfg.start.dir + "/")
     else:
         made.append(cfg.start.dir + "/")
-    for target, name in ((cfg.start.map, "map"), (f"{cfg.start.dir}/20-open-items.md", "open-items"),
+    for target, name in ((cfg.start.map, "map"), (cfg.start.items, "open-items"),
                          (cfg.start.state, "state"), (f"{cfg.start.dir}/40-way-of-work.md", "way-of-work")):
         path = root / target
         if path.exists():
@@ -457,6 +482,7 @@ def unread(cfg, md):
     covered.update(p.strip("/") for p in cfg.private)
     covered.add(cfg.start.map)
     covered.add(cfg.start.state)
+    covered.add(cfg.start.items)
     result = []
     for f in md:
         name = f.rsplit("/", 1)[-1]
@@ -517,6 +543,9 @@ def run_check(cfg):
     for f in unread(cfg, md):
         add("unread", f"{f}: no rule says when Claude reads this file. It is not in {cfg.start.dir}/, not under pack, "
                       "and not in a folder under [naming]", f)
+    found, checks = upkeep.run(cfg, files)
+    for kind, path, text in found:
+        add(kind, text, path)
     map_file = root / cfg.start.map
     if map_outside(cfg):
         pass  # the map file belongs to another project, which checks it
@@ -526,7 +555,8 @@ def run_check(cfg):
         for block in mapping.stale(cfg, files):
             what = "table of the [[area]] entries" if block == "areas" else "list of the Markdown files"
             add("map", f"the {what} in {cfg.start.map} is out of date. Run amd map.", cfg.start.map)
-    return {"root": str(root), "ok": not findings, "problems": len(findings), "budget": budget, "findings": findings}
+    return {"root": str(root), "ok": not findings, "problems": len(findings), "budget": budget, "findings": findings,
+            "checks": [{"section": s, "kind": k, "good": g} for s, k, g in checks]}
 
 
 SECTIONS = [
@@ -536,6 +566,8 @@ SECTIONS = [
     ("file names", ("naming",)),
     ("not read", ("unread",)),
     ("map file", ("map",)),
+    ("growth", ("no-readme", "no-entry", "dead-entry", "stale-readme")),
+    ("cleaning", ("dead-pointer", "orphan-plan", "orphan-note", "no-index-line", "stale-state")),
 ]
 GOOD = {
     "folders": "every listed folder has files to read before a change there, and every one of those files exists",
@@ -591,6 +623,18 @@ def cmd_check(cwd, args):
             for f in hits:
                 out(f"{mark(False)} {section.ljust(label_w)}  {f['text']}")
             continue
+        if section in ("growth", "cleaning"):
+            ran = [c for c in result["checks"] if c["section"] == section]
+            for c in ran:
+                found = [f for f in hits if f["kind"] == c["kind"]]
+                if not found:
+                    out(f"{mark(True)} {section.ljust(label_w)}  {c['good']}")
+                for f in found:
+                    out(f"{mark(False)} {section.ljust(label_w)}  {f['text']}")
+            if not ran:
+                out(f"{mark(True)} {section.ljust(label_w)}  [check] in atlasmd.toml turns these checks off, "
+                    "or their folders do not exist")
+            continue
         if not hits:
             if section == "folders" and not cfg.areas:
                 out(f"{mark(True)} {section.ljust(label_w)}  atlasmd.toml has no [[area]] entries yet, "
@@ -606,6 +650,82 @@ def cmd_check(cwd, args):
     n = result["problems"]
     out("No problems." if n == 0 else f"{n} problem{'s' if n != 1 else ''}.")
     return 0 if result["ok"] else 1
+
+
+# ---------------------------------------------------------------- area
+def cmd_area(cwd, args):
+    opts, rest = parse(args, values=("--name",))
+    if len(rest) != 1:
+        raise Problem("amd area takes one folder: amd area services/billing, or amd area services/billing "
+                      "--name \"the billing\".")
+    cfg = load_config(cwd)
+    root = cfg.root
+    target = Path(rest[0]) if os.path.isabs(rest[0]) else Path(cwd) / rest[0]
+    folder = rel(root, target).rstrip("/")
+    if folder in ("", ".") or folder.startswith("../") or os.path.isabs(folder):
+        raise Problem(f"amd area takes a folder below {root}, the folder of atlasmd.toml. {rest[0]} is not one. "
+                      "amd area made nothing.", 1)
+    if not (root / folder).is_dir():
+        raise Problem(f"{folder}/ does not exist. amd area made nothing.", 1)
+    files = scan.all_files(root)
+    if not any(f.startswith(folder + "/") and upkeep.is_source(f) for f in files):
+        raise Problem(f"{folder}/ holds no source files, so it needs no [[area]] entry. amd area made nothing.", 1)
+    for name, path in upkeep.holders(cfg, folder):
+        if path.rstrip("/") == folder or (folder + "/").startswith(path):
+            raise Problem(f"{folder}/ is in the paths of the [[area]] \"{name}\" already, as {path}. "
+                          "amd area made nothing.", 1)
+        raise Problem(f"The [[area]] \"{name}\" lists {path}, which is inside {folder}/, so a second entry for "
+                      f"{folder}/ overlaps it. Add {folder}/ to the paths of \"{name}\" in atlasmd.toml, or run "
+                      "amd area on a folder that no [[area]] entry lists. amd area made nothing.", 1)
+    name = (opts.get("--name") or folder.rsplit("/", 1)[-1]).strip()
+    if any(a.name == name for a in cfg.areas):
+        raise Problem(f"atlasmd.toml has an [[area]] with the name \"{name}\" already. Give another name with "
+                      "--name. amd area made nothing.", 1)
+    readme = f"{folder}/README.md"
+    entry = {"name": name, "paths": [folder + "/"], "pack": [readme]}
+    old = cfg.path.read_text(encoding="utf-8")
+    new = (old.rstrip("\n") + "\n\n" if old.strip() else "") + areas_toml([entry]) + "\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / config.CONFIG_NAME
+        probe.write_text(new, encoding="utf-8")
+        try:
+            config.load(probe)
+        except config.ConfigError as exc:
+            raise Problem(f"With this [[area]] entry, atlasmd.toml is not valid, so amd area made nothing. {exc}")
+    made, kept = [], []
+    if (root / readme).exists():
+        kept.append(readme)
+    else:
+        with open(root / readme, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(AREA_README.format(title=folder.rsplit("/", 1)[-1], date=datetime.date.today().isoformat()))
+        made.append(f"{readme}, from the template")
+    with open(cfg.path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(new)
+    made.append(f"the [[area]] \"{name}\" at the end of atlasmd.toml, with paths = [\"{folder}/\"] and "
+                f"pack = [\"{readme}\"]")
+    cfg = config.load(cfg.path)
+    if map_outside(cfg):
+        note = f"The map file of this project, {cfg.start.map}, is in another project. Run amd map there."
+    else:
+        mapping.write(cfg, scan.all_files(root))
+        made.append(f"{cfg.start.map}: the table of the [[area]] entries and the list of the Markdown files")
+        note = None
+    out(f"atlasmd area  {root}")
+    out()
+    out("Made:")
+    for m in made:
+        out(f"  {m}")
+    out()
+    out("Left as it was:")
+    for k in kept or ["nothing"]:
+        out(f"  {k}")
+    if note:
+        out()
+        out(note)
+    out()
+    out(f"Next: write in {readme} what the folder holds, how to run it, and its state, from the files of "
+        f"{folder}/. Then run amd check.")
+    return 0
 
 
 # ---------------------------------------------------------------- map
@@ -899,7 +1019,8 @@ def main(argv=None, cwd=None):
     if not argv or argv[0] in ("-h", "--help", "help"):
         return cmd_help()
     cmd, args = argv[0], argv[1:]
-    handlers = {"scan": cmd_scan, "init": cmd_init, "check": cmd_check, "map": cmd_map, "status": cmd_status,
+    handlers = {"scan": cmd_scan, "init": cmd_init, "check": cmd_check, "map": cmd_map, "area": cmd_area,
+                "status": cmd_status,
                 "why": cmd_why, "end": cmd_end, "set": cmd_set}
     try:
         if cmd in handlers:

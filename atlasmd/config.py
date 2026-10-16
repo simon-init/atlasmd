@@ -20,6 +20,7 @@ DEFAULT_NAMING = {
 }
 
 GUARD_MODES = ("deny", "remind", "off")
+NEW_FOLDERS = ("remind", "off")
 AGENT_INJECT = ("map", "start", "none")
 
 
@@ -37,12 +38,25 @@ class Start:
     state: str = "docs/start/30-state.md"
     map: str = "docs/start/10-map.md"
     line: str = "Say where things stand."
+    items: str = "docs/start/20-open-items.md"
 
 
 @dataclass
 class Guard:
     mode: str = "deny"
     bash: bool = True
+    new_folders: str = "remind"
+
+
+@dataclass
+class Check:
+    folders: bool = True
+    stale_readme: int = 15
+    dead_pointers: bool = True
+    plans: bool = True
+    notes: int = 30
+    decisions: bool = True
+    stale_state: int = 20
 
 
 @dataclass
@@ -64,6 +78,7 @@ class Config:
     start: Start = field(default_factory=Start)
     guard: Guard = field(default_factory=Guard)
     agents: Agents = field(default_factory=Agents)
+    check: Check = field(default_factory=Check)
     private: list[str] = field(default_factory=list)
     naming: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_NAMING))
     areas: list[Area] = field(default_factory=list)
@@ -119,8 +134,9 @@ def personal() -> dict:
 # --- loading -----------------------------------------------------------------------------------
 
 _KEYS = {
-    "start": {"dir", "files", "also", "budget", "inject", "state", "map", "line"},
-    "guard": {"mode", "bash"},
+    "start": {"dir", "files", "also", "budget", "inject", "state", "map", "line", "items"},
+    "guard": {"mode", "bash", "new_folders"},
+    "check": {"folders", "stale_readme", "dead_pointers", "plans", "notes", "decisions", "stale_state"},
     "agents": {"inject"},
     "private": {"files"},
     "naming": None,  # any folder can be a key
@@ -156,6 +172,12 @@ def _paths(value, where: str) -> list[str]:
 def _bool(value, where: str) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"In {CONFIG_NAME}, {where} must be true or false.")
+    return value
+
+
+def _count(value, where: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ConfigError(f"In {CONFIG_NAME}, {where} must be a whole number, 0 or above. 0 turns the check off.")
     return value
 
 
@@ -216,7 +238,7 @@ def load(config_path: str | os.PathLike) -> Config:
         start.budget = budget
     if "inject" in table:
         start.inject = _bool(table["inject"], "[start] inject")
-    for key in ("state", "map"):
+    for key in ("state", "map", "items"):
         if key in table:
             setattr(start, key, _path(table[key], f"[start] {key}"))
     if "line" in table:
@@ -227,6 +249,14 @@ def load(config_path: str | os.PathLike) -> Config:
         cfg.guard.mode = _choice(table["mode"], "[guard] mode", GUARD_MODES)
     if "bash" in table:
         cfg.guard.bash = _bool(table["bash"], "[guard] bash")
+    if "new_folders" in table:
+        cfg.guard.new_folders = _choice(table["new_folders"], "[guard] new_folders", NEW_FOLDERS)
+
+    table = _table(data, "check")
+    for key, value in table.items():
+        where = f"[check] {key}"
+        setattr(cfg.check, key, _count(value, where) if key in ("stale_readme", "notes", "stale_state")
+                else _bool(value, where))
 
     table = _table(data, "agents")
     if "inject" in table:
@@ -289,6 +319,7 @@ also = []                          # more folders or files, given after the file
 budget = 30000                     # the limit in estimated tokens. Above it, Claude gets the list of the files and a warning, not their text
 inject = true                      # false: Claude always gets the list of the files and reads them, never their text from the hook
 state = "docs/start/30-state.md"   # the file that says where the work stands. /amd:end writes it again
+items = "docs/start/20-open-items.md"  # the open items, one line each. amd check looks for paths in backticks in it that do not exist
 map = "docs/start/10-map.md"       # the map file. amd map writes every Markdown file and every [[area]] into it. A subagent gets it at its start
 line = "Say where things stand."   # the first message that a person sends in a fresh chat. amd end prints it
 
@@ -296,6 +327,7 @@ line = "Say where things stand."   # the first message that a person sends in a 
 # Before an edit of a file in the paths of an [[area]], the hook looks at which files under pack Claude has read in this session.
 mode = "deny"                      # deny: refuse the edit until Claude reads them. remind: permit it and name the files. off: do not look
 bash = true                        # true: the hook also looks at the Bash commands that write a file
+new_folders = "remind"             # remind: when Claude writes a new source file in a folder that no [[area]] lists, the hook tells Claude once. off: it does not
 
 [agents]
 inject = "map"                     # what a subagent gets at its start: map (the file in start.map), start (the files above) or none
@@ -304,11 +336,22 @@ inject = "map"                     # what a subagent gets at its start: map (the
 files = []                         # Markdown files that Claude gets at the start but that git never commits. amd init adds them to .git/info/exclude
 
 [naming]
-# For each folder, the regular expression that a file name must match. amd check examines these names. The hook does not.
+# For each folder, the regular expression that a file name must match. amd check examines these names,
+# and the hook refuses a Write of a new Markdown file whose name breaks the rule of its folder.
 "docs/start" = "^[0-9]{2}-[a-z0-9-]+\\.md$"
 "docs/decisions" = "^P[0-9]{3}-[a-z0-9-]+\\.md$"
 "docs/notes" = "^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+\\.md$"
 "docs/plans" = "^[a-z0-9-]+\\.md$"
+
+[check]
+# The checks of amd check that keep the Markdown files in their places. false or 0 turns a check off.
+folders = true                     # a folder with source files and no README.md or no [[area]] entry, and an [[area]] path that does not exist
+stale_readme = 15                  # a README that did not change in the last N commits that changed its folder. 0 turns it off
+dead_pointers = true               # a path in backticks in docs/start/20-open-items.md that does not exist
+plans = true                       # a file in docs/plans/ that no line of docs/start/20-open-items.md names
+notes = 30                         # a note in docs/notes/ that no Markdown file names and that is older than N days. 0 turns it off
+decisions = true                   # a file in docs/decisions/ without a line in docs/decisions/README.md
+stale_state = 20                   # the state file did not change in the last N commits. 0 turns it off
 
 # Each [[area]] lists folders or files under paths, and under pack the files that Claude must read
 # before it changes a file in those paths. The hook refuses the edit until Claude reads them in this session.
@@ -317,7 +360,7 @@ files = []                         # Markdown files that Claude gets at the star
 # Remove the # signs below to use this example.
 #
 # [[area]]
-# name = "the scrubber"
-# paths = ["services/scrubber/scrubber/", "services/scrubber/policy/"]
-# pack = ["services/scrubber/README.md", "docs/decisions/P008-default-policy.md", "docs/product-decisions.md#P15"]
+# name = "the API"
+# paths = ["api/"]
+# pack = ["api/README.md", "docs/decisions/P003-time-is-utc.md"]
 '''

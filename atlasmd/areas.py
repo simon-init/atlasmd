@@ -44,14 +44,14 @@ def pack_of(cfg: Config, area: Area) -> list[tuple[pathlib.Path, str | None]]:
 
 
 def is_free(cfg: Config, abs_path) -> bool:
-    """True for atlasmd.toml, the start reading and its folders, the state and the map, and every pack file."""
+    """True for atlasmd.toml, the start reading and its folders, the state, the map, the open items, and every pack file."""
     target = norm(abs_path)
     if target == norm(cfg.path):
         return True
     start = cfg.start
     if _under(target, norm(cfg.root / start.dir)):
         return True
-    for entry in [*start.files, *start.also, start.state, start.map, *cfg.private]:
+    for entry in [*start.files, *start.also, start.state, start.map, start.items, *cfg.private]:
         base = norm(cfg.root / entry.rstrip("/"))
         is_folder = entry.endswith("/") or os.path.isdir(base)
         if target == base or (is_folder and _under(target, base)):

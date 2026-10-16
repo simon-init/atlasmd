@@ -4,13 +4,14 @@ The Bash parser catches the common forms only. A form that it does not know pass
 """
 from __future__ import annotations
 
+import datetime
 import glob
 import os
 import re
 import shlex
 from dataclasses import dataclass, field
 
-from atlasmd import areas, config, ledger
+from atlasmd import areas, config, ledger, naming, upkeep
 
 EDIT_TOOLS = {"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path", "NotebookEdit": "notebook_path"}
 
@@ -338,6 +339,44 @@ def _reminder(cfg, area, path, missing) -> str:
     return "\n".join(lines)
 
 
+def new_file(data: dict, path: str) -> tuple[str, str] | None:
+    """The decision on a Write of a file that does not exist yet: a Markdown file whose name breaks the rule of
+    its folder, or a source file in a folder that no [[area]] entry lists. None to pass."""
+    found = config.find(path)
+    if found is None:
+        return None
+    cfg = config.load(found)
+    rel = areas.rel(cfg, path)
+    if rel.startswith("../"):
+        return None
+    if rel.lower().endswith(".md"):
+        if cfg.guard.mode == "off":
+            return None
+        try:
+            siblings = os.listdir(os.path.dirname(path))
+        except OSError:
+            siblings = []
+        text = naming.refusal(cfg.naming, rel, siblings, datetime.date.today())
+        if text is None:
+            return None
+        if cfg.guard.mode == "deny":
+            ledger.record_refusal(ledger.key(data), text)
+            return "deny", text
+        return "remind", text.replace("Name the file so, then write it again.", "Give the file a name under that rule.")
+    if cfg.guard.new_folders != "remind" or not upkeep.is_source(path) or areas.area_of(cfg, path) is not None:
+        return None
+    folder = upkeep.new_folder(cfg, path)
+    if folder is None:
+        return None
+    key = ledger.key(data)
+    here = config.norm(os.path.dirname(path))
+    if any(areas._under(here, done) for done in ledger.reminded(key)):
+        return None
+    ledger.add_reminded(key, cfg.root / folder)
+    return "remind", (f"atlasmd: {folder}/ has no [[area]] entry in atlasmd.toml. Make its README.md and add the "
+                      f"entry, or run /amd:area {folder}.")
+
+
 def check(data: dict) -> tuple[str, str] | None:
     """The decision on a PreToolUse call: None to pass, or (mode, text) with mode deny or remind."""
     tool = data.get("tool_name") or ""
@@ -351,6 +390,17 @@ def check(data: dict) -> tuple[str, str] | None:
     else:
         return None
 
+    first = new_file(data, paths[0]) if tool == "Write" and paths and not os.path.exists(paths[0]) else None
+    if first is not None and first[0] == "deny":
+        return first
+    decision = _read_first(data, tool, paths)
+    if first is None or (decision is not None and decision[0] == "deny"):
+        return decision
+    return first if decision is None else ("remind", first[1] + "\n\n" + decision[1])
+
+
+def _read_first(data: dict, tool: str, paths: list[str]) -> tuple[str, str] | None:
+    """The refusal or the reminder when the session did not read the files under pack of the [[area]] of a path."""
     key, read, loaded = ledger.key(data), None, {}
     for path in paths:
         if not path:

@@ -1,4 +1,5 @@
 """Tests of the hook: each test builds a fixture project and drives hook.py as a subprocess."""
+import datetime
 import json
 import os
 import pathlib
@@ -239,7 +240,7 @@ class Guard(HookCase):
 
     def test_a_path_in_no_area_passes(self):
         self.assertIsNone(self.edit("tools/free.py"))
-        self.assertIsNone(self.edit("tools/new-file.py", tool="Write"))
+        self.assertFalse(self.denied(self.edit("tools/new-file.py", tool="Write")))  # 0.2 reminds, see NewFiles
         self.assertIsNone(self.hook({"hook_event_name": "PreToolUse", "tool_name": "Edit",
                                      "tool_input": {"file_path": str(self.base / "elsewhere.py")}}))
 
@@ -325,6 +326,97 @@ class Guard(HookCase):
         (self.root / "docs/product-decisions.md").unlink()
         self.read("services/scrubber/README.md")
         self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+
+
+class NewFiles(HookCase):
+    """0.2: a Write of a file that does not exist yet."""
+
+    def write_new(self, rel, session="s1"):
+        return self.hook({"hook_event_name": "PreToolUse", "tool_name": "Write", "session_id": session,
+                          "tool_input": {"file_path": str(self.root / rel), "content": "x"}})
+
+    def settings(self, old, new):
+        path = self.root / "atlasmd.toml"
+        write(path, path.read_text(encoding="utf-8").replace(old, new))
+
+    def reason(self, answer):
+        self.assertTrue(self.denied(answer), answer)
+        return answer["hookSpecificOutput"]["permissionDecisionReason"]
+
+    def test_a_bad_name_is_refused_with_the_rule_in_words(self):
+        today = datetime.date.today().isoformat()
+        write(self.root / "docs/decisions/P007-old.md", "# P7\n")
+        cases = {
+            "docs/notes/Gate Run.md": f"atlasmd: docs/notes/ names its files with the date as YYYY-MM-DD, a hyphen and "
+                                      f"the subject in lower case with hyphens, for example {today}-gate-run.md. "
+                                      "Gate Run.md breaks that rule. Name the file so, then write it again.",
+            "docs/start/open.md": "atlasmd: docs/start/ names its files with two digits, a hyphen and the subject in "
+                                  "lower case with hyphens, for example 30-open.md. open.md breaks that rule. "
+                                  "Name the file so, then write it again.",
+            "docs/decisions/policy.md": "atlasmd: docs/decisions/ names its files with P, three digits, a hyphen and "
+                                        "the subject in lower case with hyphens, for example P008-policy.md. "
+                                        "policy.md breaks that rule. Name the file so, then write it again.",
+            "docs/plans/Big Plan.md": "atlasmd: docs/plans/ names its files with the subject in lower case with "
+                                      "hyphens, for example big-plan.md. Big Plan.md breaks that rule. "
+                                      "Name the file so, then write it again.",
+        }
+        for rel, text in cases.items():
+            self.assertEqual(self.reason(self.write_new(rel)), text, rel)
+        with _data(self.data):
+            self.assertEqual(ledger.last_refusal("s1"), cases["docs/plans/Big Plan.md"])
+
+    def test_a_rule_outside_the_convention_is_given_as_its_regular_expression(self):
+        self.settings("[agents]", '[naming]\n"docs/runs" = "^run-[0-9]+\\\\.md$"\n\n[agents]')
+        write(self.root / "docs/runs/run-1.md", "x")
+        self.assertEqual(self.reason(self.write_new("docs/runs/second.md")),
+                         "atlasmd: docs/runs/ names its files to match the regular expression ^run-[0-9]+\\.md$, "
+                         "for example run-1.md. second.md breaks that rule. Name the file so, then write it again.")
+
+    def test_a_good_name_and_a_readme_pass(self):
+        for rel in ("docs/notes/2026-10-16-gate-run.md", "docs/start/50-rules.md", "docs/decisions/P008-policy.md",
+                    "docs/plans/login.md", "docs/plans/README.md", "docs/elsewhere/Any Name.md"):
+            self.assertIsNone(self.write_new(rel), rel)
+
+    def test_an_edit_of_an_existing_file_with_a_bad_name_passes(self):
+        write(self.root / "docs/notes/Old Name.md", "# Old\n")
+        self.assertIsNone(self.edit("docs/notes/Old Name.md"))
+        self.assertIsNone(self.edit("docs/notes/Old Name.md", tool="Write"))
+
+    def test_remind_and_off_follow_guard_mode(self):
+        build(self.root, mode="remind")
+        answer = self.write_new("docs/plans/Big Plan.md")
+        self.assertFalse(self.denied(answer))
+        self.assertTrue(self.context(answer).endswith("Big Plan.md breaks that rule. Give the file a name under that rule."))
+        build(self.root, mode="off")
+        self.assertIsNone(self.write_new("docs/plans/Big Plan.md"))
+
+    def test_a_new_source_file_in_a_folder_without_an_entry_is_named_once(self):
+        tools = ("atlasmd: tools/ has no [[area]] entry in atlasmd.toml. Make its README.md and add the entry, "
+                 "or run /amd:area tools.")
+        answer = self.write_new("tools/new-file.py")
+        self.assertFalse(self.denied(answer))
+        self.assertEqual(self.context(answer), tools)
+        self.assertIsNone(self.write_new("tools/other.py"))
+        self.assertIsNone(self.write_new("tools/deeper/third.py"))
+        self.assertEqual(self.context(self.write_new("tools/new-file.py", session="s2")), tools)
+        self.assertIn("atlasmd: pkg/ has no [[area]] entry", self.context(self.write_new("pkg/sub/mod.py")))
+        self.assertIsNone(self.write_new("pkg/sub/two.py"))
+        self.compact()
+        self.assertEqual(self.context(self.write_new("tools/after.py")), tools)
+
+    def test_no_reminder_where_it_does_not_apply(self):
+        for rel in ("tests/test_new.py", "docs/tool.py", ".github/x.py", "tools/data.json", "top.py",
+                    "apps/review/src/new.ts"):
+            answer = self.write_new(rel)
+            if rel.startswith("apps/review/"):
+                self.assertTrue(self.denied(answer), rel)  # an [[area]] holds it: the files under pack come first
+            else:
+                self.assertIsNone(answer, rel)
+        self.assertIsNone(self.edit("tools/free.py"))
+
+    def test_new_folders_off(self):
+        self.settings("bash = true", 'bash = true\nnew_folders = "off"')
+        self.assertIsNone(self.write_new("tools/new-file.py"))
 
 
 class NoConfig(HookCase):

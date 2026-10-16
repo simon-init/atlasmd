@@ -45,3 +45,79 @@ def check(rules, paths):
             findings.append({"path": rel, "folder": folder, "rule": pattern,
                              "text": f"the file name does not match the rule for {_norm(folder)}/ under [naming]: {pattern}"})
     return findings
+
+
+# --- the rule in words, for the refusal of the hook -------------------------------------------------
+
+# Each rule of the convention, with a name that it matches, names that it does not match, and its words.
+SHAPES = [
+    ("subject", "a-subject.md", ("A Subject.md",),
+     "with the subject in lower case with hyphens"),
+    ("number", "10-a-subject.md", ("a-subject.md", "1-a-subject.md"),
+     "with two digits, a hyphen and the subject in lower case with hyphens"),
+    ("decision", "P012-a-subject.md", ("a-subject.md", "P12-a-subject.md"),
+     "with P, three digits, a hyphen and the subject in lower case with hyphens"),
+    ("date", "2026-10-16-a-subject.md", ("a-subject.md", "10-a-subject.md"),
+     "with the date as YYYY-MM-DD, a hyphen and the subject in lower case with hyphens"),
+]
+
+
+def shape(pattern):
+    """The rule of the convention that the pattern behaves as, or None."""
+    try:
+        rule = re.compile(pattern)
+    except re.error:
+        return None
+    for kind, good, bads, _words in SHAPES:
+        if rule.fullmatch(good) and not any(rule.fullmatch(b) for b in bads):
+            return kind
+    return None
+
+
+def subject(name):
+    """The subject of a file name: lower case, hyphens, without the date, the number and .md."""
+    stem = re.sub(r"\.md$", "", name, flags=re.IGNORECASE)
+    stem = re.sub(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[-_ ]*", "", stem)
+    stem = re.sub(r"^[Pp]?[0-9]+[-_ ]+", "", stem)
+    return re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-") or "subject"
+
+
+def example(pattern, name, siblings, today):
+    """A name under the rule for the file name, with the next free number. None for a rule outside the convention:
+    then the first sibling that matches the rule, or None."""
+    kind, words = shape(pattern), subject(name)
+    if kind == "subject":
+        return f"{words}.md"
+    if kind == "number":
+        used = [int(m.group(1)) for s in siblings if (m := re.match(r"^([0-9]{2})-", s))]
+        return f"{min(max(used, default=0) + 10, 99):02d}-{words}.md"
+    if kind == "decision":
+        used = [int(m.group(1)) for s in siblings if (m := re.match(r"^P([0-9]{3})-", s))]
+        return f"P{max(used, default=0) + 1:03d}-{words}.md"
+    if kind == "date":
+        return f"{today.isoformat()}-{words}.md"
+    try:
+        rule = re.compile(pattern)
+    except re.error:
+        return None
+    return next((s for s in sorted(siblings) if s != "README.md" and rule.fullmatch(s)), None)
+
+
+def refusal(rules, rel, siblings, today):
+    """The sentence that refuses a new Markdown file whose name breaks the rule of its folder, or None."""
+    found = rule_for(rules, rel)
+    name = rel.replace("\\", "/").rsplit("/", 1)[-1]
+    if not found or name == "README.md":
+        return None
+    folder, pattern = found
+    try:
+        if re.compile(pattern).fullmatch(name):
+            return None
+    except re.error:
+        return None
+    kind = shape(pattern)
+    words = next(w for k, _g, _b, w in SHAPES if k == kind) if kind else f"to match the regular expression {pattern}"
+    good = example(pattern, name, siblings, today)
+    instance = f", for example {good}" if good else ""
+    return (f"atlasmd: {_norm(folder)}/ names its files {words}{instance}. {name} breaks that rule. "
+            "Name the file so, then write it again.")
