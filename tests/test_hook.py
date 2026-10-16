@@ -134,8 +134,8 @@ class StartReading(HookCase):
         answer = self.start()
         self.assertEqual(answer["hookSpecificOutput"]["hookEventName"], "SessionStart")
         text = self.context(answer)
-        self.assertTrue(text.startswith("atlasmd: the start reading of project, 2 files, about "))
-        self.assertIn("the guard refuses an edit until the guide was read", text)
+        self.assertTrue(text.startswith("atlasmd: project has 2 files to read at the start, about "))
+        self.assertIn("every Edit and Write of that file is refused", text)
         first = text.index("## docs/start/10-map.md")
         second = text.index("## docs/start/20-open-items.md")
         self.assertLess(first, second)
@@ -150,7 +150,7 @@ class StartReading(HookCase):
         text = self.context(self.start())
         self.assertIn("Read these files now, in this order:", text)
         self.assertIn("- docs/start/10-map.md, about ", text)
-        self.assertIn("The start reading is over its budget of 10 tokens:", text)
+        self.assertIn("over the budget of 10 in atlasmd.toml", text)
         self.assertNotIn("The first file of the start reading.", text)
 
     def test_inject_false_injects_the_list_without_a_warning(self):
@@ -171,8 +171,8 @@ class StartReading(HookCase):
 
     def test_resume_injects_one_line(self):
         text = self.context(self.start("resume"))
-        self.assertRegex(text, r"^atlasmd: 2 start files, about \d+ tokens, read at the start of this session\.$")
-        self.assertRegex(self.context(self.start("fork")), r"^atlasmd: 2 start files")
+        self.assertRegex(text, r"^atlasmd gave this session 2 Markdown files at its start, about \d+ tokens\. They are in the context\.$")
+        self.assertRegex(self.context(self.start("fork")), r"^atlasmd gave this session 2 Markdown files")
 
     def test_compact_source_empties_the_ledger_and_injects(self):
         self.read_pack()
@@ -184,7 +184,7 @@ class StartReading(HookCase):
         answer = self.subagent()
         self.assertEqual(answer["hookSpecificOutput"]["hookEventName"], "SubagentStart")
         text = self.context(answer)
-        self.assertTrue(text.startswith("atlasmd: the map of project, about "))
+        self.assertTrue(text.startswith("atlasmd: docs/start/10-map.md of project, about "))
         self.assertIn("The first file of the start reading.", text)
         self.assertNotIn("The second file of the start reading.", text)
 
@@ -200,10 +200,10 @@ class Guard(HookCase):
         answer = self.edit("services/scrubber/scrubber/main.py")
         self.assertTrue(self.denied(answer))
         reason = answer["hookSpecificOutput"]["permissionDecisionReason"]
-        self.assertIn("atlasmd: read the guide of the scrubber before you change services/scrubber/scrubber/main.py.",
+        self.assertIn("atlasmd: this change to services/scrubber/scrubber/main.py is refused until you read these files:",
                       reason)
         self.assertIn("- services/scrubber/README.md\n", reason)
-        self.assertIn("Then make the change again.", reason)
+        self.assertIn("then make the change again", reason)
 
     def test_every_edit_tool_is_guarded(self):
         for tool in ("Write", "MultiEdit", "NotebookEdit"):
@@ -287,7 +287,7 @@ class Guard(HookCase):
         self.edit("services/scrubber/scrubber/main.py", agent="a1")
         with _data(self.data):
             text = ledger.last_refusal(ledger.key({"session_id": "s1", "agent_id": "a1"}))
-        self.assertTrue(text.startswith("atlasmd: read the guide of the scrubber"))
+        self.assertTrue(text.startswith("atlasmd: this change to "))
 
     def test_remind_mode_adds_context_and_does_not_refuse(self):
         build(self.root, mode="remind")
@@ -336,7 +336,7 @@ class NoConfig(HookCase):
     def test_the_offer_comes_once(self):
         text = self.context(self.hook({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(self.bare)}))
         self.assertEqual(text, "atlasmd: this project has no atlasmd.toml. "
-                               "Run /amd:init once to set up the start reading and the areas.")
+                               "Run /amd:init once. It writes atlasmd.toml and docs/start/, and lists which Markdown files Claude reads at the start and before a change in each folder.")
         self.assertIsNone(self.hook({"hook_event_name": "SessionStart", "source": "startup",
                                      "cwd": str(self.bare / "sub")}))
 
@@ -365,7 +365,7 @@ class NoConfig(HookCase):
         self.assertIn("ConfigError", log)
         self.assertIn("is not valid TOML", log)
         text = self.context(self.start())
-        self.assertIn("The start reading and the guard are off until the file is correct.", text)
+        self.assertIn("Until atlasmd.toml is correct, nothing is read at the start and no edit is refused.", text)
 
     def test_a_wrong_value_never_breaks_a_tool_call(self):
         write(self.root / "atlasmd.toml", "[guard]\nmode = 'strict'\n")

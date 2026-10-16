@@ -318,23 +318,21 @@ def bash_reads(command: str, cwd: str) -> list[str]:
 # --- the decision --------------------------------------------------------------------------------
 
 def _refusal(cfg, area, path, missing) -> str:
-    lines = [f"atlasmd: read the guide of {area.name} before you change {areas.rel(cfg, path)}.",
-             "Read these files first:"]
+    lines = [f"atlasmd: this change to {areas.rel(cfg, path)} is refused until you read these files:"]
     for file, anchor in missing:
         name = areas.rel(cfg, file)
         lines.append(f"- {name}#{anchor}, the section {anchor}" if anchor else f"- {name}")
-    lines.append("When a file you read changes what you were about to do, do what you read and say so in your report. "
-                 "Then make the change again.")
+    lines.append("Read them, then make the change again. If a file changes what you planned to do, follow the file "
+                 "and say so in your report.")
     return "\n".join(lines)
 
 
 def _reminder(cfg, area, path, missing) -> str:
-    lines = [f"atlasmd: you did not read the guide of {area.name} before this change to {areas.rel(cfg, path)}.",
-             "Read these files now:"]
+    lines = [f"atlasmd: you changed {areas.rel(cfg, path)} without these files:"]
     for file, anchor in missing:
         name = areas.rel(cfg, file)
         lines.append(f"- {name}#{anchor}, the section {anchor}" if anchor else f"- {name}")
-    lines.append("When a file you read changes what you did, correct the change and say so in your report.")
+    lines.append("Read them now. If a file changes what you did, correct the change and say so in your report.")
     return "\n".join(lines)
 
 

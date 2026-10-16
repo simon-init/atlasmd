@@ -61,12 +61,13 @@ def _offer(cwd: str) -> str:
     if root is None or ledger.seen_root(root):
         return ""
     ledger.mark_seen(root)
-    return "atlasmd: this project has no atlasmd.toml. Run /amd:init once to set up the start reading and the areas."
+    return ("atlasmd: this project has no atlasmd.toml. Run /amd:init once. It writes atlasmd.toml and docs/start/, "
+            "and lists which Markdown files Claude reads at the start and before a change in each folder.")
 
 
 def _broken(event: str, error: Exception) -> dict | None:
     log(event, f"ConfigError: {error}")
-    return _context(event, f"atlasmd: {error} The start reading and the guard are off until the file is correct.")
+    return _context(event, f"atlasmd: {error} Until atlasmd.toml is correct, nothing is read at the start and no edit is refused.")
 
 
 def session_start(data: dict) -> dict | None:
@@ -87,9 +88,9 @@ def session_start(data: dict) -> dict | None:
         return None
     if source in ("resume", "fork"):
         count = len(composed.files)
-        files = "start file" if count == 1 else "start files"
-        return _context("SessionStart", f"atlasmd: {count} {files}, about {composed.tokens} tokens, "
-                                        "read at the start of this session.")
+        files = "Markdown file" if count == 1 else "Markdown files"
+        return _context("SessionStart", f"atlasmd gave this session {count} {files} at its start, about "
+                                        f"{composed.tokens} tokens. They are in the context.")
     return _context("SessionStart", composed.text)
 
 

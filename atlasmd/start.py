@@ -13,8 +13,9 @@ from atlasmd.config import Config, norm, personal
 # Above that it writes the text to a file and gives the model a preview of 2,000 characters only.
 CONTEXT_LIMIT = 10000
 
-GUARD_LINE = ("Read an area's guide before you change the area: the guard refuses an edit until the guide was read. "
-              "When a file you read for an area changes what you were about to do, do what you read and say so in your report.")
+GUARD_LINE = ("Before you change a file in a folder that atlasmd.toml lists, read the files it names for that folder. "
+              "Until you do, every Edit and Write of that file is refused. If a file you read changes what you planned "
+              "to do, follow the file and say so in your report.")
 
 
 @dataclass
@@ -75,7 +76,7 @@ def compose(cfg: Config) -> Composed:
     if not paths:
         return Composed(text="", tokens=0, over_budget=False, files=[])
 
-    head = f"atlasmd: the start reading of {cfg.root.name}, {_count(len(paths))}, about {tokens} tokens.\n{GUARD_LINE}"
+    head = f"atlasmd: {cfg.root.name} has {_count(len(paths))} to read at the start, about {tokens} tokens.\n{GUARD_LINE}"
     full = head + "".join(f"\n\n## {areas.rel(cfg, path)}\n\n{text}" for path, text in zip(paths, contents))
     over_limit = len(full) > CONTEXT_LIMIT
     if cfg.start.inject and not over_budget and not over_limit:
@@ -95,8 +96,8 @@ def compose(cfg: Config) -> Composed:
         if given and rest:
             lines = [body, "", "The files above are in this context. Read the rest now, in this order:"]
             lines += [f"- {areas.rel(cfg, path)}, about {n} tokens" for path, n in rest]
-            lines.append(f"The whole start reading has {len(full)} characters, and Claude Code takes at most "
-                         f"{CONTEXT_LIMIT} characters from a hook.")
+            lines.append(f"All the files have {len(full)} characters, and Claude Code takes at most "
+                         f"{CONTEXT_LIMIT} characters from a hook, so the rest comes through your reads.")
             text = "\n".join(lines)
             if len(text) <= CONTEXT_LIMIT:
                 return Composed(text=text, tokens=tokens, over_budget=False, files=measured, over_limit=True)
@@ -104,11 +105,11 @@ def compose(cfg: Config) -> Composed:
     lines = [head, "Read these files now, in this order:"]
     lines += [f"- {areas.rel(cfg, path)}, about {n} tokens" for path, n in measured]
     if over_budget:
-        lines.append(f"The start reading is over its budget of {cfg.start.budget} tokens: {tokens}. "
-                     "Move what is not needed at every start out of the start folder.")
+        lines.append(f"These files have about {tokens} tokens, over the budget of {cfg.start.budget} in atlasmd.toml. "
+                     "Move what is not needed at every start out of docs/start/.")
     elif cfg.start.inject:
-        lines.append(f"The start reading has {len(full)} characters. Claude Code takes at most {CONTEXT_LIMIT} "
-                     "characters from a hook, so this list replaces the content.")
+        lines.append(f"These files have {len(full)} characters, and Claude Code takes at most {CONTEXT_LIMIT} "
+                     "characters from a hook, so you get this list and read the files.")
     return Composed(text="\n".join(lines), tokens=tokens, over_budget=over_budget, files=measured,
                     over_limit=over_limit)
 
@@ -120,7 +121,8 @@ def compose_map(cfg: Config) -> str:
         return ""
     text = _read(path)
     tokens = estimate_tokens(text, personal()["token_chars"])
-    head = f"atlasmd: the map of {cfg.root.name}, about {tokens} tokens.\n{GUARD_LINE}"
+    head = (f"atlasmd: {areas.rel(cfg, path)} of {cfg.root.name}, about {tokens} tokens. It says what the project is, "
+            f"which files to read before a change in each listed folder, and where every Markdown file is.\n{GUARD_LINE}")
     full = f"{head}\n\n## {areas.rel(cfg, path)}\n\n{text}"
     if len(full) <= CONTEXT_LIMIT:
         return full

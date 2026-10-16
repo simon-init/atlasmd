@@ -1,12 +1,14 @@
 {
   "name": "atlasmd",
-  "owner": { "name": "simon-init" },
-  "description": "atlasmd keeps a project's Markdown small at the start of a Claude Code session, and makes an agent read an area's guide before it changes the area.",
+  "owner": {
+    "name": "simon-init"
+  },
+  "description": "atlasmd gives Claude the Markdown files in docs/start/ at the start of a session and after a compaction, instead of the whole repository. Refuses a change to a file in a listed folder until Claude has read the files listed for that folder. Logs the date and the size of every compaction summary.",
   "plugins": [
     {
       "name": "amd",
       "source": "./",
-      "description": "Keeps a project's Markdown small at the start of a session, and makes an agent read an area's guide before it changes the area. Saves tokens on every compact.",
+      "description": "Gives Claude the Markdown files in docs/start/ at the start of a session and after a compaction, instead of the whole repository. Refuses a change to a file in a listed folder until Claude has read the files listed for that folder. Logs the date and the size of every compaction summary.",
       "version": "0.1.1"
     }
   ]
