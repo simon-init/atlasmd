@@ -1,0 +1,36 @@
+{
+  "name": "amd",
+  "displayName": "atlasmd",
+  "description": "Keeps a project's Markdown small at the start of a session, and makes an agent read an area's guide before it changes the area. Saves tokens on every compact.",
+  "version": "0.1.0",
+  "author": { "name": "simon-init" },
+  "homepage": "https://github.com/simon-init/atlasmd",
+  "repository": "https://github.com/simon-init/atlasmd",
+  "license": "MIT",
+  "keywords": ["context", "markdown", "docs", "hooks", "compaction", "tokens"],
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\" || python \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\"", "timeout": 15, "statusMessage": "atlasmd" } ] }
+    ],
+    "SubagentStart": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\" || python \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\"", "timeout": 15 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash", "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\" || python \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\"", "timeout": 15, "statusMessage": "atlasmd" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Read|Bash", "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\" || python \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\"", "timeout": 15 } ] }
+    ],
+    "PostCompact": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\" || python \"${CLAUDE_PLUGIN_ROOT}/atlasmd/hook.py\"", "timeout": 15 } ] }
+    ]
+  },
+  "userConfig": {
+    "offer_setup": {
+      "type": "boolean",
+      "title": "Offer the setup",
+      "description": "In a project without atlasmd.toml, say once that /amd:init sets it up.",
+      "default": true
+    }
+  }
+}

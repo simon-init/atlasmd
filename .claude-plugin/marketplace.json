@@ -1,0 +1,13 @@
+{
+  "name": "atlasmd",
+  "owner": { "name": "simon-init" },
+  "description": "atlasmd keeps a project's Markdown small at the start of a Claude Code session, and makes an agent read an area's guide before it changes the area.",
+  "plugins": [
+    {
+      "name": "amd",
+      "source": "./",
+      "description": "Keeps a project's Markdown small at the start of a session, and makes an agent read an area's guide before it changes the area. Saves tokens on every compact.",
+      "version": "0.1.0"
+    }
+  ]
+}
