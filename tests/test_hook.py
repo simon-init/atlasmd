@@ -200,7 +200,7 @@ class Guard(HookCase):
         answer = self.edit("services/scrubber/scrubber/main.py")
         self.assertTrue(self.denied(answer))
         reason = answer["hookSpecificOutput"]["permissionDecisionReason"]
-        self.assertIn("atlasmd: this change to services/scrubber/scrubber/main.py is refused until you read these files:",
+        self.assertIn("atlasmd: this change to services/scrubber/scrubber/main.py is refused until you read the files that atlasmd.toml lists for \"the scrubber\":",
                       reason)
         self.assertIn("- services/scrubber/README.md\n", reason)
         self.assertIn("then make the change again", reason)

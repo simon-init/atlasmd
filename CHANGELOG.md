@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.2
+
+2026-10-16.
+
+- Every text that a person reads says what atlasmd does: the file, the folder, the key of `atlasmd.toml` and the log, never a word coined for a concept. Simon's rule of the same day.
+- The refusal names the entry of `atlasmd.toml` whose files are missing, so `amd status` finds it again.
+
 ## 0.1.1
 
 2026-10-16.

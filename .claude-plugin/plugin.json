@@ -2,7 +2,7 @@
   "name": "amd",
   "displayName": "atlasmd",
   "description": "Gives Claude the Markdown files in docs/start/ at the start of a session and after a compaction, instead of the whole repository. Refuses a change to a file in a listed folder until Claude has read the files listed for that folder. Logs the date and the size of every compaction summary.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": {
     "name": "simon-init"
   },

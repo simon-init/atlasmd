@@ -318,7 +318,8 @@ def bash_reads(command: str, cwd: str) -> list[str]:
 # --- the decision --------------------------------------------------------------------------------
 
 def _refusal(cfg, area, path, missing) -> str:
-    lines = [f"atlasmd: this change to {areas.rel(cfg, path)} is refused until you read these files:"]
+    lines = [f"atlasmd: this change to {areas.rel(cfg, path)} is refused until you read the files that "
+             f"atlasmd.toml lists for \"{area.name}\":"]
     for file, anchor in missing:
         name = areas.rel(cfg, file)
         lines.append(f"- {name}#{anchor}, the section {anchor}" if anchor else f"- {name}")
@@ -328,7 +329,8 @@ def _refusal(cfg, area, path, missing) -> str:
 
 
 def _reminder(cfg, area, path, missing) -> str:
-    lines = [f"atlasmd: you changed {areas.rel(cfg, path)} without these files:"]
+    lines = [f"atlasmd: you changed {areas.rel(cfg, path)} without the files that atlasmd.toml lists for "
+             f"\"{area.name}\":"]
     for file, anchor in missing:
         name = areas.rel(cfg, file)
         lines.append(f"- {name}#{anchor}, the section {anchor}" if anchor else f"- {name}")
