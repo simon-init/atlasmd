@@ -14,8 +14,10 @@ from atlasmd.config import Config, norm, personal
 CONTEXT_LIMIT = 10000
 
 GUARD_LINE = ("Before you change a file in a folder that atlasmd.toml lists, read the files it names for that folder. "
-              "Until you do, every Edit and Write of that file is refused. If a file you read changes what you planned "
-              "to do, follow the file and say so in your report.")
+              "Until you do, every Edit and Write of that file is refused. If what you read changes your mind about how to do it, do it the way you now think is right, and say in your report what changed and why. "
+              "A new Markdown file takes the name rule of its folder, under [naming] in atlasmd.toml. A new folder "
+              "with code gets a README.md and an [[area]] entry in atlasmd.toml in the same commit. A built plan "
+              "moves to docs/archive/. An open item is one line that leaves when it closes.")
 
 
 @dataclass

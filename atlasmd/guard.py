@@ -335,7 +335,7 @@ def _reminder(cfg, area, path, missing) -> str:
     for file, anchor in missing:
         name = areas.rel(cfg, file)
         lines.append(f"- {name}#{anchor}, the section {anchor}" if anchor else f"- {name}")
-    lines.append("Read them now. If a file changes what you did, correct the change and say so in your report.")
+    lines.append("Read them now. If what you read changes your mind about the change you made, correct it, and say in your report what changed and why.")
     return "\n".join(lines)
 
 

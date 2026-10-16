@@ -93,7 +93,7 @@ Claude writes this file again at the end of every session, with /amd:end.
 The rules that Claude follows in every session of this project. Keep only what every session needs.
 
 - Before you change a file in a folder that atlasmd.toml lists, read the files listed for that folder. The hook refuses the edit until you read them.
-- If a file you read changes what you planned to do, follow the file and say so in your report.
+- If what you read changes your mind about how to do it, do it the way you now think is right, and say in your report what changed and why.
 
 ## How the Markdown files live
 
