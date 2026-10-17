@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.2
+
+2026-10-17.
+
+- Windows: when several reads end at the same time, each one is kept. A read or a write of the record of read files that meets the file in use by another hook process now tries again for up to two seconds. Before, a reader stopped with an error and a writer gave up after 0.15 seconds, so a read could be lost and the next edit refused without need.
+
 ## 0.4.1
 
 2026-10-17. Changes for the scan of the plugin directory.

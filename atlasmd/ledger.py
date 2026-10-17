@@ -81,10 +81,29 @@ def _lock(path: pathlib.Path):
             lock.unlink(missing_ok=True)
 
 
+def _patient(action):
+    """Run action. On Windows, a file that another process replaces or holds open gives PermissionError for a
+    moment: try again for up to two seconds before the error goes up."""
+    deadline = time.monotonic() + 2.0
+    pause = 0.005
+    while True:
+        try:
+            return action()
+        except PermissionError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(pause)
+            pause = min(pause * 2, 0.05)
+
+
+def _read_json(path: pathlib.Path):
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 def _load(path: pathlib.Path, key: str) -> dict:
     try:
-        with open(path, encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = _patient(lambda: _read_json(path))
         if isinstance(data, dict):
             data.setdefault("paths", [])
             data.setdefault("refusals", [])
@@ -100,13 +119,10 @@ def _save(path: pathlib.Path, data: dict) -> None:
     temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     with open(temporary, "w", encoding="utf-8") as handle:
         json.dump(data, handle, ensure_ascii=False)
-    for attempt in range(5):
-        try:
-            os.replace(temporary, path)
-            return
-        except PermissionError:  # Windows: a reader holds the file open
-            time.sleep(0.01 * (attempt + 1))
-    temporary.unlink(missing_ok=True)
+    try:
+        _patient(lambda: os.replace(temporary, path))
+    except PermissionError:  # still in use after two seconds: a lost read is better than a failed tool call
+        temporary.unlink(missing_ok=True)
 
 
 def _change(key: str, change) -> None:
