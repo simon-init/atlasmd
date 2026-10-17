@@ -40,6 +40,7 @@ OPTIONS = [
     ("check --json", "the same as JSON, for a skill"),
     ("init --areas-json <file>", "add the [[area]] entries of a JSON file"),
     ("init --dry-run", "show what init writes, and write nothing"),
+    ("init --undo", "remove what init made, while none of it changed"),
     ("area --name <name>", "the name of the new [[area]] entry"),
     ("status --session <id>", "the files that one session read"),
     ("status --agent <id>", "the files that a subagent of that session read"),
@@ -402,9 +403,75 @@ def remove_exclude(root, line):
             fh.write("".join(f"{x}\n" for x in lines if x != line))
 
 
+def init_undo(cwd, dry):
+    """amd init --undo: remove what amd init made, while none of it changed. One changed file stops the whole undo."""
+    existing = config.find(cwd)
+    if existing is None:
+        raise Problem(f"No atlasmd.toml in {cwd} or above it, so there is nothing to undo.", 1)
+    root = existing.parent
+    defaults = config.defaults_text().rstrip("\n") + "\n"
+    start_dir = "docs/start"
+    try:
+        cfg = config.load(existing)
+        start_dir = cfg.start.dir
+        files = {config.CONFIG_NAME: defaults, cfg.start.map: TEMPLATES["map"], cfg.start.items: TEMPLATES["open-items"],
+                 cfg.start.state: TEMPLATES["state"], f"{cfg.start.dir}/40-way-of-work.md": TEMPLATES["way-of-work"]}
+    except config.ConfigError:
+        files = {config.CONFIG_NAME: defaults}
+    changed, remove = [], []
+    for rel_path, template in files.items():
+        path = root / rel_path
+        if not path.is_file():
+            continue
+        if path.read_text(encoding="utf-8") == template:
+            remove.append(rel_path)
+        else:
+            changed.append(rel_path)
+    if changed:
+        raise Problem("amd init --undo removes only what amd init made, and only while none of it changed. "
+                      "These files changed:\n" + "\n".join(f"  {c}" for c in changed) +
+                      "\nNothing removed. Delete by hand what you do not want.", 1)
+    gone = {root / r for r in remove}
+    folders, left = [], []
+    for folder in [start_dir] + FOLDERS + ["docs"]:
+        path = root / folder
+        if not path.is_dir():
+            continue
+        if all(child in gone for child in path.iterdir()):
+            folders.append(folder + "/")
+            gone.add(path)
+        else:
+            left.append(folder + "/")
+    found = False
+    if not dry:
+        for rel_path in remove:
+            (root / rel_path).unlink()
+        for folder in folders:
+            (root / folder).rmdir()
+        try:
+            found = projects.remove(root)
+        except OSError:
+            pass
+    out(f"atlasmd init --undo  {root}" + ("  (dry run: nothing removed)" if dry else ""))
+    out()
+    out("To remove:" if dry else "Removed:")
+    for item in remove + folders or ["nothing"]:
+        out(f"  {item}")
+    out()
+    out("Left as it was:")
+    for item in left or ["nothing"]:
+        out(f"  {item}" + ("  (not empty)" if item in left else ""))
+    if found:
+        out()
+        out("The repository left the table of repositories in " + tilde(projects.path()) + ".")
+    return 0
+
+
 def cmd_init(cwd, args):
-    opts, _ = parse(args, flags=("--dry-run",), values=("--areas-json",))
+    opts, _ = parse(args, flags=("--dry-run", "--undo"), values=("--areas-json",))
     dry = bool(opts.get("--dry-run"))
+    if opts.get("--undo"):
+        return init_undo(cwd, dry)
     items = load_areas(opts["--areas-json"], cwd) if "--areas-json" in opts else []
     existing = config.find(cwd)
     root = existing.parent if existing else (scan.git_root(cwd) or Path(cwd))
@@ -501,7 +568,8 @@ def cmd_init(cwd, args):
         out()
         out(note)
     out()
-    out(f"Next: write the text of the files in {cfg.start.dir}/, then run amd map and amd check.")
+    out(f"Next: write the text of the files in {cfg.start.dir}/, then run amd map and amd check. "
+        "Wrong folder? amd init --undo removes all of this while none of it changed.")
     return 0
 
 

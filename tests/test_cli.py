@@ -403,3 +403,37 @@ class Route(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InitUndo(Base):
+    def test_undo_removes_what_init_made_while_nothing_changed(self):
+        before = self.files()
+        code, text = self.amd("init")
+        self.assertEqual(code, 0, text)
+        self.assertIn("amd init --undo", text)
+        code, text = self.amd("init", "--undo", "--dry-run")
+        self.assertEqual(code, 0, text)
+        self.assertIn("To remove:", text)
+        self.assertTrue((self.root / "atlasmd.toml").is_file())
+        code, text = self.amd("init", "--undo")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(self.files(), before)
+        self.assertIn("  docs/start/\n", text)
+        self.assertIn("  docs/plans/\n", text)
+        self.assertIn("docs/  (not empty)", text)  # docs/old-notes.md was there before init
+        self.assertIn("left the table of repositories", text)
+
+    def test_undo_refuses_after_a_change_and_removes_nothing(self):
+        self.amd("init")
+        write(self.root, "docs/start/30-state.md", "# Where things stand\n\nMine.\n")
+        code, text = self.amd("init", "--undo")
+        self.assertEqual(code, 1)
+        self.assertIn("docs/start/30-state.md", text)
+        self.assertIn("Nothing removed", text)
+        self.assertTrue((self.root / "atlasmd.toml").is_file())
+        self.assertTrue((self.root / "docs/start/10-map.md").is_file())
+
+    def test_undo_outside_a_repository_says_so(self):
+        code, text = self.amd("init", "--undo", cwd=self.tmp.name)
+        self.assertEqual(code, 1)
+        self.assertIn("nothing to undo", text)

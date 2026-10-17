@@ -1,5 +1,12 @@
 # Changes
 
+## 0.3.4
+
+2026-10-17. Simon: a way back after `amd init` in the wrong folder, and who does what.
+
+- `amd init --undo` removes what `amd init` made, the five files and the empty folders, while none of them changed. One changed file stops it, and the message names the file. `--dry-run` shows what it removes. The last line of `amd init` names the undo.
+- The README has the section "What happens by itself, and what you do": what the hook does at every session without a command, what Claude does in a session because the rules say so, what happens only when you ask, and what atlasmd never does. It says that nothing sorts the existing Markdown files by itself: `/amd:init` proposes the moves, also after `amd init`.
+
 ## 0.3.3
 
 2026-10-17. Simon: the README was far too long, and `amd area` on the repository itself gave a confusing message.

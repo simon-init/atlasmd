@@ -90,13 +90,41 @@ Made:
 Left as it was:
   nothing
 
-Next: write the text of the files in docs/start/, then run amd map and amd check.
+Next: write the text of the files in docs/start/, then run amd map and amd check. Wrong folder? amd init --undo removes all of this while none of it changed.
+```
+
+Wrong folder? `amd init --undo` removes exactly these files and folders, as long as none
+of them changed. One changed file stops it, and the message names the file.
+
+```
+❯ amd init --undo
+atlasmd init --undo  /home/you/api
+
+Removed:
+  atlasmd.toml
+  docs/start/10-map.md
+  docs/start/20-open-items.md
+  docs/start/30-state.md
+  docs/start/40-way-of-work.md
+  docs/start/
+  docs/decisions/
+  docs/plans/
+  docs/notes/
+  docs/archive/
+  docs/
+
+Left as it was:
+  nothing
 ```
 
 **`/amd:init`**, in a Claude Code session. Claude reads the names of your Markdown files,
 proposes in one message what goes into the four files, which files to read before a
 change in each folder, and which files to move, and asks once. After your yes it writes
 the files and moves what you agreed to. It commits nothing.
+
+Nothing sorts the Markdown files that the repository has already. `amd init` and
+`amd setup` leave them where they are. `/amd:init` is the one that proposes where each
+file goes and moves it after your yes. It works also after `amd init`.
 
 ### Add a code folder
 
@@ -128,6 +156,32 @@ README from the files of the folder.
 
 `amd check` prints one line per check, `✓` or `✗`, and what to fix. It ends with
 `No problems.` or with the exit code 1.
+
+## What happens by itself, and what you do
+
+**By itself, in every session, without a command.** The hook:
+
+- gives Claude the files of `docs/start/` at the start and after every compaction,
+- refuses an edit in a listed folder until Claude read the files named for it,
+- refuses a new Markdown file whose name breaks the rule of its folder,
+- tells Claude once when it writes code in a folder without an `[[area]]` entry,
+- writes the line in `compacts.log` and the token record of the session,
+- says once, in a repository without `atlasmd.toml`: run `/amd:init`.
+
+**Claude does in a session, because `docs/start/40-way-of-work.md` tells it to.** After
+the reminder for a new code folder, Claude writes the README and the `[[area]]` entry.
+A decision gets a file in `docs/decisions/`. An open item gets a line. The state file is
+rewritten at the end. This is what Claude usually does, not a guarantee: `amd check`
+shows what it missed.
+
+**Only when you ask.** `/amd:init` asks once, then writes and moves. `/amd:area` writes
+the README of one folder. `/amd:check` makes the fixes that you agree to. `/amd:end`
+makes the fixes, rewrites the state file, commits and pushes. Every `amd` command in a
+terminal.
+
+**Never.** atlasmd deletes no file of yours. `amd init --undo` removes only its own
+unchanged files. It moves no file without your yes, and it commits nothing except
+`/amd:end` when you type it.
 
 ## In a session
 
@@ -192,6 +246,7 @@ config` opens a screen with every repository, its settings and its files. `amd c
 |---|---|
 | `amd setup` | the six steps, once after the install |
 | `amd init` | write `atlasmd.toml` and `docs/start/`, overwrite nothing |
+| `amd init --undo` | remove what `amd init` made, while none of it changed |
 | `amd area <folder>` | README and `[[area]]` entry for one code folder |
 | `amd check` | report what to fix |
 | `amd map` | write the tree of the Markdown files into `docs/start/10-map.md` |
