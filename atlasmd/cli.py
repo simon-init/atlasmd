@@ -730,10 +730,11 @@ def cmd_area(cwd, args):
     target = Path(rest[0]) if os.path.isabs(rest[0]) else Path(cwd) / rest[0]
     folder = rel(root, target).rstrip("/")
     if folder in ("", ".") or folder.startswith("../") or os.path.isabs(folder):
-        raise Problem(f"amd area takes a folder below {root}, the folder of atlasmd.toml. {rest[0]} is not one. "
-                      "amd area made nothing.", 1)
+        raise Problem(f"amd area takes a folder of this repository that holds code, for example amd area api. "
+                      f"{rest[0]} is the root of the repository, {root}, not a folder in it. amd area made nothing.", 1)
     if not (root / folder).is_dir():
-        raise Problem(f"{folder}/ does not exist. amd area made nothing.", 1)
+        raise Problem(f"There is no folder {folder}/ in {root}. amd area takes a folder of this repository that "
+                      "holds code, for example amd area api. amd area made nothing.", 1)
     files = scan.all_files(root)
     if not any(f.startswith(folder + "/") and upkeep.is_source(f) for f in files):
         raise Problem(f"{folder}/ holds no source files, so it needs no [[area]] entry. amd area made nothing.", 1)
@@ -775,7 +776,7 @@ def cmd_area(cwd, args):
         note = f"The map file of this project, {cfg.start.map}, is in another project. Run amd map there."
     else:
         mapping.write(cfg, scan.all_files(root))
-        made.append(f"{cfg.start.map}: the table of the [[area]] entries and the list of the Markdown files")
+        made.append(f"{cfg.start.map}: the table of the [[area]] entries and the tree of the Markdown files")
         note = None
     out(f"atlasmd area  {root}")
     out()
@@ -962,7 +963,7 @@ def cmd_why(cwd, args):
             candidates.append((_when(refusals[-1].get("time")), data))
     if not candidates:
         where = f" for the session {opts['--session']}" if opts.get("--session") else ""
-        out(f"No refused edit{where} in the last 14 days. The hook keeps the lists of read files and refused edits "
+        out(f"No refused edit{where} in the last 14 days. The hook keeps the records of read files and refused edits "
             "for 14 days.")
         return 0
     candidates.sort(key=lambda c: c[0].timestamp() if c[0] else 0, reverse=True)

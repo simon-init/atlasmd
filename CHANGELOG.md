@@ -1,5 +1,13 @@
 # Changes
 
+## 0.3.3
+
+2026-10-17. Simon: the README was far too long, and `amd area` on the repository itself gave a confusing message.
+
+- The README is a fifth of its size. The reason first, then what atlasmd does, the install, the three ways to set up a repository, each command with its output, and one table for the files, one for `atlasmd.toml` and one for the commands.
+- `amd area` on the root of the repository, or on a folder that does not exist, says that it takes a folder of the repository that holds code, for example `amd area api`. The README has a section "Add a code folder" with the output.
+- The output of `amd area` and `amd why` says "the tree of the Markdown files" and "the records of read files", not "the list".
+
 ## 0.3.2
 
 2026-10-17. The README and the texts of the setup say what each thing is before they name it.

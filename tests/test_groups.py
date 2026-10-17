@@ -390,7 +390,7 @@ class Words(Base):
         self.assertIn("as text when they fit in 10,000 characters", line.split("#", 1)[1])
         self.assertNotIn("inject", line.split("#", 1)[1])
         readme = (REPO / "README.md").read_text(encoding="utf-8")
-        self.assertIn("whether the start files go in as text, when they fit, or always as the names of the files", readme)
+        self.assertNotIn("inject", readme)
 
 
 class About(unittest.TestCase):
