@@ -291,6 +291,18 @@ class Scan(Base):
         self.assertIn("services/", text)
         self.assertIn("Folders with source files and a README  2", text)
 
+    def test_scan_lists_the_code_folders_without_a_readme(self):
+        data = json.loads(self.amd("scan", "--json")[1])
+        self.assertEqual(data["without_readme"], [])
+        write(self.root, "tools/run.py", "x = 1\n")
+        write(self.root, "tools/deep/more.py", "y = 2\n")
+        data = json.loads(self.amd("scan", "--json")[1])
+        self.assertEqual(data["without_readme"], [{"path": "tools/", "source_files": 2}])
+        self.assertNotIn("tools/", {c["path"] for c in data["candidates"]})
+        code, text = self.amd("scan")
+        self.assertIn("Folders with source files and no README  1", text)
+        self.assertIn("  tools/     2 source files", text)
+
     def test_scan_skips_ignored_files(self):
         write(self.root, ".gitignore", "secret/\n")
         write(self.root, "secret/notes.md", "# Mine\n")

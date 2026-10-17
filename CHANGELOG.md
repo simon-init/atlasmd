@@ -1,5 +1,12 @@
 # Changes
 
+## 0.3.6
+
+2026-10-17. Simon: `/amd:init` must cover every code folder at once, not wait for an edit there.
+
+- `/amd:init` proposes an `[[area]]` entry for every folder that holds code, with a README or without one, so that every source file is under the paths of an entry. After the yes, Claude writes the README of each code folder that has none, from its files. The reminder of the hook stays for a folder that comes later.
+- `amd scan` lists the code folders without a README, in the text and as `without_readme` in the JSON.
+
 ## 0.3.5
 
 2026-10-17. Simon: a removal from `amd config` must remove atlasmd from the repository, and the plugin needs a logo and the notes for the directory.

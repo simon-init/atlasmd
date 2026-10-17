@@ -120,6 +120,18 @@ def area_candidates(root, files):
     return out
 
 
+def folders_without_readme(files):
+    """Folders below the root that hold source files and no README.md in them or in a folder above them, the top
+    folders only, as amd check reports them."""
+    from atlasmd import upkeep  # upkeep imports scan, so the import stays here
+    out = []
+    for folder in upkeep.no_readme(files):
+        prefix = folder + "/"
+        count = sum(1 for f in files if f.startswith(prefix) and Path(f).suffix.lower() in SOURCE_EXT)
+        out.append({"path": prefix, "source_files": count})
+    return out
+
+
 def claude_md(root):
     """The Markdown files that CLAUDE.md at the root names, with whether each exists."""
     path = Path(root) / "CLAUDE.md"
@@ -148,6 +160,7 @@ def scan(root):
         "total": {"files": len(md), "kb": round(sum(f["kb"] for f in md), 1),
                   "tokens": sum(f["tokens"] for f in md)},
         "candidates": area_candidates(root, files),
+        "without_readme": folders_without_readme(files),
         "claude_md": claude_md(root),
     }
 
@@ -197,6 +210,14 @@ def render(data):
         lines.append("")
         for c in data["candidates"]:
             lines.append(f"  {c['path']:<{width}}  {c['source_files']:>4} source file{'s' if c['source_files'] != 1 else ' '}  {c['heading']}".rstrip())
+    lines.append("")
+    lines.append(f"Folders with source files and no README  {len(data['without_readme'])}. "
+                 "/amd:init writes a README for each one and lists it as an [[area]]")
+    if data["without_readme"]:
+        width = max(len(c["path"]) for c in data["without_readme"])
+        lines.append("")
+        for c in data["without_readme"]:
+            lines.append(f"  {c['path']:<{width}}  {c['source_files']:>4} source file{'s' if c['source_files'] != 1 else ''}")
     cm = data["claude_md"]
     lines.append("")
     if cm is None:

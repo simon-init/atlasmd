@@ -119,10 +119,11 @@ Left as it was:
   nothing
 ```
 
-**`/amd:init`**, in a Claude Code session. Claude reads the names of your Markdown files,
-proposes in one message what goes into the four files, which files to read before a
-change in each folder, and which files to move, and asks once. After your yes it writes
-the files and moves what you agreed to. It commits nothing.
+**`/amd:init`**, in a Claude Code session. Claude reads the names of your Markdown files
+and your code folders. It proposes in one message what goes into the four files, an entry
+for every code folder with the files to read before a change there, and which files to
+move, and asks once. After your yes it writes the files, writes a README for every code
+folder that has none, and moves what you agreed to. It commits nothing.
 
 Nothing sorts the Markdown files that the repository has already. `amd init` and
 `amd setup` leave them where they are. `/amd:init` is the one that proposes where each
@@ -130,8 +131,8 @@ file goes and moves it after your yes. It works also after `amd init`.
 
 ### Add a code folder
 
-`amd area <folder>` is for one folder with code inside the repository, not for the
-repository itself. It writes `<folder>/README.md` and tells the hook: before a change in
+`/amd:init` covers every code folder at the setup. `amd area <folder>` is for one folder
+with code that comes later, inside the repository, not for the repository itself. It writes `<folder>/README.md` and tells the hook: before a change in
 this folder, read this README. Run it in the root of the repository with the name of the
 folder, or inside the folder with `.`:
 
@@ -177,9 +178,10 @@ repository's `atlasmd.toml`, so the hook gives no start files and refuses nothin
 - writes the line in `compacts.log` and the token record of the session,
 - says once, in a repository without `atlasmd.toml`: run `/amd:init`.
 
-**Claude does in a session, because `docs/start/40-way-of-work.md` tells it to.** After
-the reminder for a new code folder, Claude writes the README and the `[[area]]` entry.
-A decision gets a file in `docs/decisions/`. An open item gets a line. The state file is
+**Claude does in a session, because `docs/start/40-way-of-work.md` tells it to.** At
+`/amd:init`, every code folder gets its entry and its README. Later, when Claude writes
+code in a new folder, the hook reminds it once, and Claude writes the README and the
+entry. A decision gets a file in `docs/decisions/`. An open item gets a line. The state file is
 rewritten at the end. This is what Claude usually does, not a guarantee: `amd check`
 shows what it missed.
 
