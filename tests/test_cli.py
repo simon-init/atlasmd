@@ -15,8 +15,16 @@ sys.path.insert(0, str(ROOT))
 
 from atlasmd import cli, config, ledger, tui  # noqa: E402
 
-GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@localhost",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@localhost"}
+
+KEEP = ("PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG",
+        "LC_ALL", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PYTHONIOENCODING")
+
+
+def base_env():
+    """The few variables that git and Python need, read by name. Never the whole environment."""
+    return {k: os.environ[k] for k in KEEP if os.environ.get(k) is not None}
 
 
 def git(root, *args):
@@ -24,7 +32,7 @@ def git(root, *args):
     hooks.mkdir(exist_ok=True)
     return subprocess.run(["git", "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={hooks}",
                            "-c", "init.defaultBranch=master", *args],
-                          cwd=root, capture_output=True, text=True, env={**os.environ, **GIT_ENV}, check=True)
+                          cwd=root, capture_output=True, text=True, env={**base_env(), **GIT_ENV}, check=True)
 
 
 def write(root, rel, text):

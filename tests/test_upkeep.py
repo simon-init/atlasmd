@@ -38,11 +38,20 @@ def write(root, rel, text):
     return path
 
 
+KEEP = ("PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG",
+        "LC_ALL", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PYTHONIOENCODING")
+
+
+def base_env():
+    """The few variables that git and Python need, read by name. Never the whole environment."""
+    return {k: os.environ[k] for k in KEEP if os.environ.get(k) is not None}
+
+
 def git(root, *args, when="2026-01-01T12:00:00"):
     hooks = Path(root).parent / "no-hooks"
     hooks.mkdir(exist_ok=True)
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t",
-           "GIT_COMMITTER_EMAIL": "t@example.com", "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
+    env = {**base_env(), "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@localhost", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@localhost", "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
     return subprocess.run(["git", "-c", "commit.gpgsign=false", "-c", f"core.hooksPath={hooks}",
                            "-c", "init.defaultBranch=master", *args],
                           cwd=root, capture_output=True, text=True, env=env, check=True)
@@ -168,7 +177,7 @@ class Cleaning(Case):
         self.assertEqual(self.found("dead-pointer"), [])
         write(self.root, "docs/start/20-open-items.md",
               "# Open items\n\n- `docs/plans/login.md` `app/` `app/README.md#state` `docs/plans/gone.md`\n"
-              "- `notes.md` `amd check --json` `git log -- app/` `https://example.com/a/b` `<folder>/` `P12`\n")
+              "- `notes.md` `amd check --json` `git log -- app/` `https://localhost/a/b` `<folder>/` `P12`\n")
         self.assertEqual(self.found("dead-pointer"), [
             ("docs/plans/gone.md", "docs/start/20-open-items.md names docs/plans/gone.md, which does not exist. "
                                    "Fix the line or remove it."),

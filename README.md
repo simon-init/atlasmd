@@ -304,6 +304,11 @@ and the transcript of the session for the token counts. It keeps the paths of re
 the counts and the dates under `~/.claude/plugins/data/amd/`, never the text of a message.
 It sends nothing anywhere. [PRIVACY.md](PRIVACY.md) has the full list.
 
+The hook never approves a tool call. It refuses one with a reason, or it says nothing. The
+plugin reads these variables of the environment by name, and no other: `ATLASMD`,
+`ATLASMD_DATA`, `CLAUDE_PLUGIN_OPTION_OFFER_SETUP`, `CLAUDE_PROJECT_DIR`, `NO_COLOR`, `PATH`,
+`SHELL` and `TERM`, and the home folder.
+
 ## Uninstall
 
 ```

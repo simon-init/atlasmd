@@ -1,5 +1,13 @@
 # Changes
 
+## 0.4.1
+
+2026-10-17. Changes for the scan of the plugin directory.
+
+- No file of the plugin reads the whole environment. The tests give git and the hook the few variables that they need, by name, and the color check reads `NO_COLOR` by name.
+- The test data says `localhost` where it said `example.com`.
+- The README says that the hook never approves a tool call, and which variables of the environment the plugin reads.
+
 ## 0.4.0
 
 2026-10-17. The plugin is named atlasmd, and amd is the command in the terminal.

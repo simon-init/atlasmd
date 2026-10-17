@@ -1453,11 +1453,11 @@ def cmd_statusline(cwd, args):
         size = (data.get("context_window") or {}).get("context_window_size")
         if record is not None:
             record = meter.refresh(record, size if isinstance(size, int) and size > 0 else None)
-            out(meter.status_line(record, "NO_COLOR" not in os.environ))
+            out(meter.status_line(record, os.environ.get("NO_COLOR") is None))
         elif config.find(data.get("cwd") or cwd) is None:
             out(f"atlasmd · no atlasmd.toml in {Path(data.get('cwd') or cwd).name}")
         else:
-            out(meter.status_line(None, "NO_COLOR" not in os.environ))
+            out(meter.status_line(None, os.environ.get("NO_COLOR") is None))
     except Exception:  # noqa: BLE001  a status line prints, it never shows a traceback
         out("atlasmd")
     return 0

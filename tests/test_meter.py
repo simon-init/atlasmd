@@ -47,6 +47,15 @@ def lines(*items):
     return "".join((item if isinstance(item, str) else json.dumps(item)) + "\n" for item in items)
 
 
+KEEP = ("PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG",
+        "LC_ALL", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PYTHONIOENCODING")
+
+
+def base_env():
+    """The few variables that git and Python need, read by name. Never the whole environment."""
+    return {k: os.environ[k] for k in KEEP if os.environ.get(k) is not None}
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -74,7 +83,7 @@ class Base(unittest.TestCase):
 
     def hook(self, payload, **env):
         payload = {**self.event(), **payload}
-        clean = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ATLASMD"))}
+        clean = base_env()
         proc = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload), capture_output=True, text=True,
                               env={**clean, "ATLASMD_DATA": str(self.data), **env}, timeout=30)
         self.assertEqual((proc.returncode, proc.stderr), (0, ""))

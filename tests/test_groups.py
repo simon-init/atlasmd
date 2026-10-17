@@ -18,8 +18,16 @@ sys.path.insert(0, str(REPO))
 
 from atlasmd import cli, config, projects, screen, setup  # noqa: E402
 
-GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@localhost",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@localhost"}
+
+KEEP = ("PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG",
+        "LC_ALL", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PYTHONIOENCODING")
+
+
+def base_env():
+    """The few variables that git and Python need, read by name. Never the whole environment."""
+    return {k: os.environ[k] for k in KEEP if os.environ.get(k) is not None}
 
 
 def write(path, text):
@@ -31,7 +39,7 @@ def write(path, text):
 
 def git(root, *args):
     return subprocess.run(["git", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=master", *args], cwd=root,
-                          capture_output=True, text=True, env={**os.environ, **GIT_ENV}, check=True)
+                          capture_output=True, text=True, env={**base_env(), **GIT_ENV}, check=True)
 
 
 class Base(unittest.TestCase):
@@ -67,7 +75,7 @@ class Base(unittest.TestCase):
 
     def hook(self, payload, **env):
         payload = {"session_id": "s1", "transcript_path": str(self.base / "t.jsonl"), **payload}
-        clean = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ATLASMD"))}
+        clean = base_env()
         proc = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload), capture_output=True, text=True,
                               env={**clean, "ATLASMD_DATA": str(self.data), **env}, timeout=30)
         self.assertEqual((proc.returncode, proc.stderr), (0, ""))

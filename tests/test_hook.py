@@ -57,6 +57,15 @@ def build(root: pathlib.Path, budget=30000, inject="true", mode="deny", bash="tr
     (root / ".git").mkdir(exist_ok=True)
 
 
+KEEP = ("PATH", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "LANG",
+        "LC_ALL", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PYTHONIOENCODING")
+
+
+def base_env():
+    """The few variables that git and Python need, read by name. Never the whole environment."""
+    return {k: os.environ[k] for k in KEEP if os.environ.get(k) is not None}
+
+
 class HookCase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -69,7 +78,7 @@ class HookCase(unittest.TestCase):
         self._tmp.cleanup()
 
     def env(self, **extra):
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ATLASMD"))}
+        env = base_env()
         env["ATLASMD_DATA"] = str(self.data)
         env.update(extra)
         return env

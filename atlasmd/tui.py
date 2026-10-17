@@ -128,7 +128,7 @@ def footer_rows(keys, width):
 # ---------------------------------------------------------------- color in plain output
 def use_color(stream=None):
     stream = stream or sys.stdout
-    return (hasattr(stream, "isatty") and stream.isatty() and "NO_COLOR" not in os.environ
+    return (hasattr(stream, "isatty") and stream.isatty() and os.environ.get("NO_COLOR") is None
             and os.environ.get("TERM") != "dumb" and os.name != "nt")
 
 
