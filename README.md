@@ -24,6 +24,10 @@ they grew to about 580,000 tokens, and every session read all of them at its sta
 atlasmd decides which files a session reads at the start, and which files Claude reads
 before a change in each folder.
 
+With atlasmd, a session in that project starts at about 85,000 tokens instead. Claude
+reads more only when a task takes it into a folder, so the context grows with the work,
+and the quality of the work stayed almost the same.
+
 ## What it does
 
 - **At the start of a session, and after every compaction,** Claude gets the Markdown

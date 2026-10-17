@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.6
+
+2026-10-17.
+
+- The README gives the size of a session start with atlasmd.
+
 ## 0.4.5
 
 2026-10-17.
