@@ -7,6 +7,7 @@ without options: they are screens and need a terminal. The launcher bin/amd runs
 import datetime
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -49,7 +50,7 @@ OPTIONS = [
     ("config --set <path> <key> <value>", "write one key into atlasmd.toml there:"),
     ("", "group, guard.mode, start.inject or start.budget"),
     ("config --json", "the table as JSON, for a skill"),
-    ("config --remove <path>", "remove a repository from that table only"),
+    ("config --remove <path>", "delete atlasmd.toml there, keep the rest"),
     ("meter --list", "the same as the screen, as text"),
     ("meter --compare <id> <id>", "compare two sessions"),
     ("meter --json", "the records of this repository as JSON"),
@@ -1302,11 +1303,35 @@ def list_entry(cwd, ident):
     raise Problem(f"{ident} is not in the table of repositories in {tilde(projects.path())}. amd config --list shows the table.")
 
 
-def removed_text(name, path):
-    """The sentence after a removal from the list."""
-    return (f"{name} left the table of repositories in {tilde(projects.path())}. Nothing in {tilde(path)} changed: atlasmd.toml, "
-            "docs/start/ and every other file stay. amd init, amd config or the next session start there puts it "
-            "back into the table.")
+def _tracked(root, rel_path):
+    """True when git tracks the file, so git restore brings it back."""
+    try:
+        done = subprocess.run(["git", "ls-files", "--error-unmatch", rel_path], cwd=root, capture_output=True, text=True)
+        return done.returncode == 0
+    except OSError:
+        return False
+
+
+def remove_atlasmd(root):
+    """Remove atlasmd from a repository: delete its atlasmd.toml, drop its row from the table of repositories, and
+    stop the offer of /amd:init there. Every other file stays. Returns the sentence for the person."""
+    root = Path(root)
+    toml_path = root / config.CONFIG_NAME
+    had_toml = toml_path.is_file()
+    tracked = had_toml and _tracked(root, config.CONFIG_NAME)
+    if had_toml:
+        toml_path.unlink()
+    projects.remove(root)
+    try:
+        ledger.mark_seen(root)
+    except OSError:
+        pass
+    if not had_toml:
+        return (f"{root.name} left the table of repositories in {tilde(projects.path())}. It had no atlasmd.toml, "
+                "so nothing else changed.")
+    back = " git restore atlasmd.toml brings it back." if tracked else ""
+    return (f"atlasmd left {root.name}: {tilde(toml_path)} is deleted, so the hook gives no start files and refuses "
+            f"nothing there. docs/start/ and every other file stay.{back} amd init there sets atlasmd up again.")
 
 
 def toggle_private(cfg, rel_path):
@@ -1351,8 +1376,7 @@ def cmd_config(cwd, args):
             raise Problem("amd config --remove takes one repository of the table, by its path or its name, for "
                           "example: amd config --remove ~/old-api")
         entry = list_entry(cwd, args[1])
-        projects.remove(entry["path"])
-        out(removed_text(entry["name"], entry["path"]))
+        out(remove_atlasmd(entry["path"]))
         return 0
     opts, _ = parse(args, flags=("--list", "--json"))
     register_here(cwd)

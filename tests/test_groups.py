@@ -328,7 +328,8 @@ class Remove(Base):
     def files(self, root):
         return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
 
-    def test_remove_takes_the_repository_off_the_list_and_changes_no_file(self):
+    def test_remove_deletes_atlasmd_toml_and_keeps_every_other_file(self):
+        from atlasmd import ledger
         api = self.repo("api", "shop", ["10-map.md", "20-open-items.md"])
         web = self.repo("web", "shop", ["10-map.md"])
         projects.touch(api, "")
@@ -336,14 +337,15 @@ class Remove(Base):
         before = self.files(api)
         code, text = self.amd("config", "--remove", str(api))
         self.assertEqual(code, 0, text)
-        self.assertIn("api left the table of repositories in", text)
-        self.assertIn("atlasmd.toml, docs/start/ and every other file stay", text)
-        self.assertIn("amd init, amd config or the next session start there puts it back into the table", text)
-        self.assertEqual([e["name"] for e in projects.load()], ["web"])
+        self.assertIn("atlasmd left api", text)
+        self.assertIn("docs/start/ and every other file stay", text)
+        self.assertIn("amd init there sets atlasmd up again", text)
+        self.assertFalse((api / "atlasmd.toml").exists())
+        before.pop("atlasmd.toml")
         self.assertEqual(self.files(api), before)
+        self.assertEqual([e["name"] for e in projects.load()], ["web"])
         self.assertNotIn("../api/", self.start(web) or "")  # the group lost its files with the entry
-        self.start(api)
-        self.assertEqual([e["name"] for e in projects.load()], ["api", "web"])
+        self.assertTrue(ledger.seen_root(api))  # no offer of /amd:init at the next session there
 
     def test_remove_takes_a_name_and_refuses_one_that_is_not_on_the_list(self):
         web = self.repo("web", None, [])
@@ -354,9 +356,18 @@ class Remove(Base):
         code, text = self.amd("config", "--remove", "web")
         self.assertEqual(code, 0, text)
         self.assertEqual(projects.load(), [])
-        self.assertTrue((web / "atlasmd.toml").is_file())
+        self.assertFalse((web / "atlasmd.toml").exists())
 
-    def test_r_on_a_row_asks_once_then_removes_it_from_the_list_only(self):
+    def test_remove_of_a_repository_without_atlasmd_toml_drops_the_row_only(self):
+        web = self.repo("web", None, [])
+        projects.touch(web, "")
+        (web / "atlasmd.toml").unlink()
+        code, text = self.amd("config", "--remove", str(web))
+        self.assertEqual(code, 0, text)
+        self.assertIn("had no atlasmd.toml", text)
+        self.assertEqual(projects.load(), [])
+
+    def test_r_on_a_row_asks_once_then_removes_atlasmd_from_the_repository(self):
         api = self.repo("api", "shop", ["10-map.md"])
         web = self.repo("web", None, [])
         projects.touch(api, "")
@@ -365,12 +376,15 @@ class Remove(Base):
         fake = FakeScreen(answer="n")
         fake.repositories.key(ord("r"))
         self.assertEqual([e["name"] for e in projects.load()], ["api", "web"])
-        self.assertTrue(any(s.startswith("Remove api from the table of repositories? No file in it changes.") for s in fake.said))
+        self.assertTrue(any(s.startswith("Remove atlasmd from api? This deletes") for s in fake.said))
+        self.assertEqual(self.files(api), before)
         fake.answer = "y"
         fake.repositories.key(ord("r"))
         self.assertEqual([e["name"] for e in projects.load()], ["web"])
         self.assertEqual(fake.names(), ["web"])
-        self.assertIn("api left the table of repositories in", fake.repositories.note)
+        self.assertIn("atlasmd left api", fake.repositories.note)
+        self.assertFalse((api / "atlasmd.toml").exists())
+        before.pop("atlasmd.toml")
         self.assertEqual(self.files(api), before)
 
 

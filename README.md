@@ -1,5 +1,7 @@
 # atlasmd
 
+![atlasmd](assets/logo-128.png)
+
 ![tests](https://github.com/simon-init/atlasmd/actions/workflows/tests.yml/badge.svg)
 
 A plugin for Claude Code. It tells Claude which Markdown files to read at the start of a
@@ -157,6 +159,13 @@ README from the files of the folder.
 `amd check` prints one line per check, `✓` or `✗`, and what to fix. It ends with
 `No problems.` or with the exit code 1.
 
+### Remove atlasmd from a repository
+
+`amd config` shows every repository that atlasmd knows. `r` on a repository there, or
+`amd config --remove <path>` in a terminal, removes atlasmd from it: it deletes that
+repository's `atlasmd.toml`, so the hook gives no start files and refuses nothing there.
+`docs/start/` and every other file stay. `amd init` there sets it up again.
+
 ## What happens by itself, and what you do
 
 **By itself, in every session, without a command.** The hook:
@@ -179,9 +188,9 @@ the README of one folder. `/amd:check` makes the fixes that you agree to. `/amd:
 makes the fixes, rewrites the state file, commits and pushes. Every `amd` command in a
 terminal.
 
-**Never.** atlasmd deletes no file of yours. `amd init --undo` removes only its own
-unchanged files. It moves no file without your yes, and it commits nothing except
-`/amd:end` when you type it.
+**Never.** atlasmd deletes no file of yours. `amd init --undo` removes its own unchanged
+files, and `r` in `amd config` deletes only `atlasmd.toml`. It moves no file without your
+yes, and it commits nothing except `/amd:end` when you type it.
 
 ## In a session
 
@@ -254,7 +263,7 @@ config` opens a screen with every repository, its settings and its files. `amd c
 | `amd status` | which files this session read |
 | `amd why` | the last refused edit |
 | `amd end` | what is not committed or pushed, and the first message for a fresh chat |
-| `amd config` | every repository, its settings and its files |
+| `amd config` | every repository, its settings and its files. `--remove <path>` removes atlasmd from one |
 | `amd meter` | the tokens of the sessions, on against off |
 | `amd statusline` | one line for the status line of Claude Code |
 | `amd set <key> <value>` | your two settings: `offer_setup`, `token_chars` |
@@ -284,6 +293,15 @@ For a status line under the chat, put this into `~/.claude/settings.json`. It th
 { "statusLine": { "type": "command", "command": "amd statusline" } }
 ```
 
+## What it runs, reads and keeps
+
+The hook is a Python script that Claude Code runs on your computer at the start of a
+session, before an edit, after a read and after a compaction. It reads `atlasmd.toml` and
+the Markdown files that it names, the paths of the files that Claude reads and changes,
+and the transcript of the session for the token counts. It keeps the paths of read files,
+the counts and the dates under `~/.claude/plugins/data/amd/`, never the text of a message.
+It sends nothing anywhere. [PRIVACY.md](PRIVACY.md) has the full list.
+
 ## Uninstall
 
 ```
@@ -293,5 +311,4 @@ claude plugin uninstall amd@atlasmd
 The files of atlasmd stay in `~/.claude/plugins/data/amd/` until you delete that folder.
 Your repositories keep `atlasmd.toml` and `docs/start/` as plain files.
 
-Nothing leaves your computer. [PRIVACY.md](PRIVACY.md) lists what the plugin reads and
-keeps. MIT license, see [LICENSE](LICENSE).
+MIT license, see [LICENSE](LICENSE).

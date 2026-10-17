@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>atlasmd</title>
+  <rect width="256" height="256" rx="56" fill="#141821"/>
+  <g transform="translate(128 128) scale(1.18) translate(-128 -128)">
+    <!-- the page, with the top-right corner folded -->
+    <path d="M64 48 H160 L192 80 V208 H64 Z" fill="#F4F1EA"/>
+    <path d="M160 48 V80 H192 Z" fill="#D6D1C4"/>
+    <!-- two lines of text -->
+    <rect x="84" y="94" width="64" height="10" rx="5" fill="#B9B4A7"/>
+    <rect x="84" y="114" width="44" height="10" rx="5" fill="#B9B4A7"/>
+    <!-- the route on the map: from the start dot to the destination ring -->
+    <polyline points="88,178 118,152 138,168 164,136" fill="none" stroke="#F59E0B" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="88" cy="178" r="8" fill="#F59E0B"/>
+    <circle cx="164" cy="136" r="10" fill="#F4F1EA" stroke="#F59E0B" stroke-width="9"/>
+  </g>
+</svg>

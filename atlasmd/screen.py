@@ -52,7 +52,7 @@ SENTENCE = 24  # a label longer than this is a sentence
 HELP = {
     0: [("↑↓", "scroll"), ("tab", "next station"), ("q", "quit")],
     1: [("↑↓", "move"), ("enter", "open"), ("g", "group"), ("m", "guard.mode"), ("i", "start files as text"),
-        ("b", "start.budget"), ("r", "remove from the table"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
+        ("b", "start.budget"), ("r", "remove atlasmd here"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
     2: [("↑↓", "move"), ("←→", "change"), ("enter", "change or type"), ("tab", "next station"), ("s", "save"),
         ("q", "quit")],
     3: [("↑↓", "move"), ("p", "private or not"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
@@ -197,10 +197,10 @@ def about_lines(width):
          "still gets the start files there. To stop them too, delete atlasmd.toml in that repository.", "· ")
     para("ATLASMD=off claude: one session without atlasmd. The hook gives no start files, refuses no edit and "
          "gives no reminder. The meter records the session, marked off.", "· ")
-    para(f"r on a row of Repositories, or amd config --remove <path>: the repository leaves the table of repositories in "
-         f"{cli.tilde(projects.path())}, and the other repositories of its group stop getting its docs/start/. "
-         "Nothing in the repository changes. amd init, amd config or the next session start there puts it back "
-         "into the table.", "· ")
+    para("r on a row of Repositories, or amd config --remove <path>: atlasmd leaves that repository. Its "
+         "atlasmd.toml is deleted, so the hook gives no start files and refuses nothing there, and the other "
+         "repositories of its group stop getting its docs/start/. Every other file stays. amd init there sets it "
+         "up again.", "· ")
     return lines
 
 
@@ -326,21 +326,22 @@ class Repositories:
         return self.s.repos[self.cursor] if self.s.repos else None
 
     def remove(self, repo):
-        """r: remove the repository from the list after one question. No file of the repository changes."""
+        """r: remove atlasmd from the repository after one question: delete its atlasmd.toml and drop its row.
+        Every other file of the repository stays."""
         s = self.s
         lost = " Its changes that are not saved are lost." if repo.dirty() else ""
-        answer = s.ask_key(f"Remove {repo.name} from the table of repositories? No file in it changes.{lost}  y removes, another key "
-                           "stays", HELP[1])
+        answer = s.ask_key(f"Remove atlasmd from {repo.name}? This deletes {cli.tilde(f'{repo.path}/atlasmd.toml')} and "
+                           f"keeps every other file.{lost}  y deletes, another key keeps", HELP[1])
         s.say("")
         if answer not in (ord("y"), ord("Y")):
             return
         try:
-            projects.remove(repo.path)
+            note = cli.remove_atlasmd(repo.path)
         except OSError as exc:
-            s.say(f"{repo.name} stays in the table: {exc}", problem=True)
+            s.say(f"atlasmd stays in {repo.name}: {exc}", problem=True)
             return
         s.drop(repo)
-        self.note = cli.removed_text(repo.name, repo.path)
+        self.note = note
 
     def key(self, key):
         s, curses = self.s, self.s.curses

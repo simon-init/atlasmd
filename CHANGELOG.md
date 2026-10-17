@@ -1,5 +1,14 @@
 # Changes
 
+## 0.3.5
+
+2026-10-17. Simon: a removal from `amd config` must remove atlasmd from the repository, and the plugin needs a logo and the notes for the directory.
+
+- `r` on a repository in `amd config`, and `amd config --remove <path>`, remove atlasmd from that repository: they delete its `atlasmd.toml`, so the hook gives no start files and refuses nothing there, drop its row from the table of repositories, and stop the offer of `/amd:init` there. Every other file stays. The question before the deletion names the file. When git tracks the file, the message says that `git restore atlasmd.toml` brings it back. A repository whose `atlasmd.toml` is gone already leaves the table only.
+- The logo: a page with a route on it, in `assets/`, as SVG and PNG. The README shows it.
+- `SUBMISSION.md`: what must be true before a submission to Anthropic's directory, the steps in the portal, the answers to the data questions, and the risk of the name `amd`.
+- The README has the section "What it runs, reads and keeps".
+
 ## 0.3.4
 
 2026-10-17. Simon: a way back after `amd init` in the wrong folder, and who does what.
