@@ -40,7 +40,7 @@ HINTS = {
     ("agents", "inject"): {"map": "the file in start.map",
                            "start": "the same start files as a session",
                            "none": "nothing"},
-    ("you", "offer_setup"): "offer /amd:init without atlasmd.toml",
+    ("you", "offer_setup"): "offer /atlasmd:init without atlasmd.toml",
     ("you", "token_chars"): "characters per estimated token",
 }
 LABELS = {("you", "offer_setup"): "offer setup", ("you", "token_chars"): "token chars",
@@ -181,8 +181,8 @@ def about_lines(width):
     for sentence in cli.WHAT:
         para(sentence, "· ")
     heading("Set up a repository")
-    para("amd init in the root of the repository, or /amd:init in a Claude Code session. amd init writes "
-         "atlasmd.toml and the four files of docs/start/. /amd:init also fills them.", "1. ")
+    para("amd init in the root of the repository, or /atlasmd:init in a Claude Code session. amd init writes "
+         "atlasmd.toml and the four files of docs/start/. /atlasmd:init also fills them.", "1. ")
     para("amd map writes the names of every Markdown file as a tree, and the table of the [[area]] entries, into "
          "the map file.", "2. ")
     para("amd check reports what to fix.", "3. ")
@@ -440,7 +440,7 @@ class Settings:
                     if i == current:
                         out.extend(self.area_detail(i))
             else:
-                out.append(("note", None, "atlasmd.toml lists no folders yet. /amd:init in a Claude Code session "
+                out.append(("note", None, "atlasmd.toml lists no folders yet. /atlasmd:init in a Claude Code session "
                                           "proposes them."))
             out.append(("blank", None, None))
         else:

@@ -11,11 +11,11 @@ End the session in four steps.
    - `dead-pointer`: correct the path in the line of `docs/start/20-open-items.md`. If the item of the line is closed, remove the line.
    - `no-index-line`: add the line of the decision to `docs/decisions/README.md`.
    - `stale-readme`: read the commits of the folder since the README last changed, with `git log --oneline`, and update the State section of the README.
-   - `no-readme`: write the README.md of the folder, or run `/amd:area <folder>`.
+   - `no-readme`: write the README.md of the folder, or run `/atlasmd:area <folder>`.
 
    The plugin deletes no file. A file that leaves goes to `docs/archive/` with `git mv`, and git keeps every version. Keep a list of what you moved and what you changed, and of what you left, with the reason for each.
 
-2. Write again the file that `atlasmd.toml` names under `start.state`, `docs/start/30-state.md` by default: what was done since the last `/amd:end`, what the person must look at, what waits on a person, and what comes next. Write each as short lines, with the path of the file that holds the details. Keep the file under 12,000 characters. Move out of it what is no longer current. Then update `docs/start/20-open-items.md` the same way.
+2. Write again the file that `atlasmd.toml` names under `start.state`, `docs/start/30-state.md` by default: what was done since the last `/atlasmd:end`, what the person must look at, what waits on a person, and what comes next. Write each as short lines, with the path of the file that holds the details. Keep the file under 12,000 characters. Move out of it what is no longer current. Then update `docs/start/20-open-items.md` the same way.
 
 3. Run `"${CLAUDE_PLUGIN_ROOT}/bin/amd" check`, fix what it reports, and commit the changed files by name. Push, unless the rules of the project say when a push must wait. Run `"${CLAUDE_PLUGIN_ROOT}/bin/amd" end`: it shows what is not committed or not pushed.
 

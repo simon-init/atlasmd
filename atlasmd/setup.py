@@ -67,7 +67,7 @@ HOW = (
 YOU = (
     "Two settings that apply to every repository on this computer.\n\n"
     "1. A repository without atlasmd.toml, that is, a repository where atlasmd is not set up yet. At the start "
-    "of a session there, should Claude say once: run /amd:init to set up atlasmd here? Yes or no.\n\n"
+    "of a session there, should Claude say once: run /atlasmd:init to set up atlasmd here? Yes or no.\n\n"
     "2. Characters per token. A token is the unit in which the model counts text. atlasmd shows sizes in "
     "tokens, and it counts one token for every 2.5 characters. That fits English text and code. A larger "
     "number gives smaller sizes.\n\n"
@@ -199,7 +199,7 @@ class Setup(tui.Page):
             return self.command_step()
         if self.step == 3:
             return YOU, [
-                ("Suggest /amd:init", "yes" if self.offer else "no",
+                ("Suggest /atlasmd:init", "yes" if self.offer else "no",
                  "in a repository without atlasmd.toml", self.toggle_offer),
                 ("Characters per token, for the sizes", f"{self.chars:g}", "Enter types a number", self.type_chars),
                 ("Continue", "", "", self.next),
@@ -209,11 +209,11 @@ class Setup(tui.Page):
         lines = [
             "## Saved",
             f"- Your settings: {short(self.saved_to)}" if self.saved_to else "- Your settings: not saved",
-            f"- Suggest /amd:init in a repository without atlasmd.toml: {'yes' if self.offer else 'no'}",
+            f"- Suggest /atlasmd:init in a repository without atlasmd.toml: {'yes' if self.offer else 'no'}",
             f"- Characters per token: {self.chars:g}",
             "",
             "## Three commands to remember",
-            "- /amd:init, in a Claude Code session, writes atlasmd.toml, fills docs/start/, and lists which files "
+            "- /atlasmd:init, in a Claude Code session, writes atlasmd.toml, fills docs/start/, and lists which files "
             "Claude reads before it changes a file in each folder.",
             "- amd check, in a terminal, finds problems: docs/start/ over its token limit, files that atlasmd.toml "
             "names but that do not exist, and file names that break the rule of their folder.",
@@ -253,7 +253,7 @@ class Setup(tui.Page):
             made = self.init_output.split("Made:", 1)[-1].split("\n\n", 1)[0]
             text = "amd init ran in " + short(root) + ". It made these:\n\n" + "\n".join(
                 "- " + line.strip() for line in made.splitlines() if line.strip())
-            text += ("\n\nIn a Claude Code session, /amd:init then fills the four files of docs/start/ and "
+            text += ("\n\nIn a Claude Code session, /atlasmd:init then fills the four files of docs/start/ and "
                      "proposes which files Claude reads before a change in each folder.")
             return text, [("Continue", "", "", self.next)]
         if error:
@@ -263,7 +263,7 @@ class Setup(tui.Page):
                     "amd init writes atlasmd.toml, the settings file of atlasmd, four files in docs/start/ with their "
                     "headings and nothing under them, and the empty folders "
                     "docs/decisions/, docs/plans/, docs/notes/ and docs/archive/. It overwrites nothing. In a Claude "
-                    "Code session, /amd:init does more: it reads the repository, fills the four files, and proposes "
+                    "Code session, /atlasmd:init does more: it reads the repository, fills the four files, and proposes "
                     "which files Claude reads before a change in each folder.")
             return text, [("Run amd init now", "", "writes in " + short(root) + " now", self.run_init),
                           ("Skip", "", "", self.next)]
@@ -276,7 +276,7 @@ class Setup(tui.Page):
                  (" The files are over this limit." if composed.over_budget else ""), "",
                  "## Before an edit"]
         if not cfg.areas:
-            lines.append("atlasmd.toml lists no folders yet. /amd:init in a Claude Code session proposes them.")
+            lines.append("atlasmd.toml lists no folders yet. /atlasmd:init in a Claude Code session proposes them.")
         for area in cfg.areas:
             n = len(area.pack)
             p = len(area.paths)
@@ -292,7 +292,7 @@ class Setup(tui.Page):
                 return f"add {amd_path().parent} to PATH"
             return self.link_result[0] if self.link_result else "amd works in this terminal already"
         if self.step == 3:
-            return (f"suggest /amd:init: {'yes' if self.offer else 'no'}   "
+            return (f"suggest /atlasmd:init: {'yes' if self.offer else 'no'}   "
                     f"characters per token: {self.chars:g}")
         if self.step == 4:
             root = cli.project_root(self.cwd)

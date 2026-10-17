@@ -345,7 +345,7 @@ class Remove(Base):
         self.assertEqual(self.files(api), before)
         self.assertEqual([e["name"] for e in projects.load()], ["web"])
         self.assertNotIn("../api/", self.start(web) or "")  # the group lost its files with the entry
-        self.assertTrue(ledger.seen_root(api))  # no offer of /amd:init at the next session there
+        self.assertTrue(ledger.seen_root(api))  # no offer of /atlasmd:init at the next session there
 
     def test_remove_takes_a_name_and_refuses_one_that_is_not_on_the_list(self):
         web = self.repo("web", None, [])
@@ -420,7 +420,7 @@ class About(unittest.TestCase):
         self.assertEqual(len(cli.SKILLS), len(list((REPO / "skills").glob("*/SKILL.md"))))
         steps = [line for line in text.splitlines() if line[:3] in ("1. ", "2. ", "3. ")]
         self.assertEqual([s.split()[1:3] for s in steps], [["amd", "init"], ["amd", "map"], ["amd", "check"]])
-        self.assertIn("/amd:init in a Claude Code session", steps[0])
+        self.assertIn("/atlasmd:init in a Claude Code session", steps[0])
         for way in ("guard.mode = off, with m on a row", "delete atlasmd.toml", "ATLASMD=off claude",
                     "r on a row of Repositories, or amd config --remove <path>"):
             self.assertIn(way, text)

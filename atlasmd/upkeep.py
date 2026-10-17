@@ -214,10 +214,10 @@ def run(cfg, files, today: datetime.date | None = None):
     if c.folders:
         for folder in no_readme(files):
             findings.append(("no-readme", folder + "/", f"{folder}/ has source files and no README.md. "
-                                                        f"Write one, or run /amd:area {folder}."))
+                                                        f"Write one, or run /atlasmd:area {folder}."))
         for folder in no_entry(cfg, files):
             findings.append(("no-entry", folder + "/", f"{folder}/ has source files and no [[area]] entry in "
-                                                       f"atlasmd.toml lists it. Run /amd:area {folder}."))
+                                                       f"atlasmd.toml lists it. Run /atlasmd:area {folder}."))
         for area in cfg.areas:
             for path in area.paths:
                 if not (root / path.rstrip("/")).exists():
@@ -279,7 +279,7 @@ def run(cfg, files, today: datetime.date | None = None):
             n = _commits(root, since, [])
             if n >= c.stale_state:
                 findings.append(("stale-state", cfg.start.state, f"{cfg.start.state} did not change in the last "
-                                                                 f"{n} commits. Rewrite it with /amd:end."))
+                                                                 f"{n} commits. Rewrite it with /atlasmd:end."))
             checks.append(("cleaning", "stale-state",
                            f"{cfg.start.state} changed within the last {c.stale_state} commits"))
     return findings, checks

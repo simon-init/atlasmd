@@ -39,16 +39,16 @@ Needs Claude Code, Python 3.11 or newer, and git. In a terminal:
 
 ```
 claude plugin marketplace add simon-init/atlasmd
-claude plugin install amd@atlasmd
+claude plugin install atlasmd@atlasmd
 ```
 
 The first command prints `Successfully added marketplace: atlasmd`, the second
-`Successfully installed plugin: amd@atlasmd (scope: user)`. The plugin is on in every
+`Successfully installed plugin: atlasmd@atlasmd (scope: user)`. The plugin is on in every
 session from the next session on. In a Claude Code session, this one command does the
-same: `/plugin install amd --marketplace simon-init/atlasmd`.
+same: `/plugin install atlasmd --marketplace simon-init/atlasmd`.
 
 Nothing changes in a repository until you set it up. Until then, Claude gets one sentence
-at the start of a session there: run `/amd:init` once.
+at the start of a session there: run `/atlasmd:init` once.
 
 ### amd in your terminal
 
@@ -119,19 +119,19 @@ Left as it was:
   nothing
 ```
 
-**`/amd:init`**, in a Claude Code session. Claude reads the names of your Markdown files
+**`/atlasmd:init`**, in a Claude Code session. Claude reads the names of your Markdown files
 and your code folders. It proposes in one message what goes into the four files, an entry
 for every code folder with the files to read before a change there, and which files to
 move, and asks once. After your yes it writes the files, writes a README for every code
 folder that has none, and moves what you agreed to. It commits nothing.
 
 Nothing sorts the Markdown files that the repository has already. `amd init` and
-`amd setup` leave them where they are. `/amd:init` is the one that proposes where each
+`amd setup` leave them where they are. `/atlasmd:init` is the one that proposes where each
 file goes and moves it after your yes. It works also after `amd init`.
 
 ### Add a code folder
 
-`/amd:init` covers every code folder at the setup. `amd area <folder>` is for one folder
+`/atlasmd:init` covers every code folder at the setup. `amd area <folder>` is for one folder
 with code that comes later, inside the repository, not for the repository itself. It writes `<folder>/README.md` and tells the hook: before a change in
 this folder, read this README. Run it in the root of the repository with the name of the
 folder, or inside the folder with `.`:
@@ -152,7 +152,7 @@ Next: write in api/README.md what the folder holds, how to run it, and its state
 ```
 
 A folder that does not exist, that holds no code, or that is listed already, gets one
-sentence and `amd area made nothing`. In a session, `/amd:area api` also writes the
+sentence and `amd area made nothing`. In a session, `/atlasmd:area api` also writes the
 README from the files of the folder.
 
 ### Check
@@ -176,23 +176,23 @@ repository's `atlasmd.toml`, so the hook gives no start files and refuses nothin
 - refuses a new Markdown file whose name breaks the rule of its folder,
 - tells Claude once when it writes code in a folder without an `[[area]]` entry,
 - writes the line in `compacts.log` and the token record of the session,
-- says once, in a repository without `atlasmd.toml`: run `/amd:init`.
+- says once, in a repository without `atlasmd.toml`: run `/atlasmd:init`.
 
 **Claude does in a session, because `docs/start/40-way-of-work.md` tells it to.** At
-`/amd:init`, every code folder gets its entry and its README. Later, when Claude writes
+`/atlasmd:init`, every code folder gets its entry and its README. Later, when Claude writes
 code in a new folder, the hook reminds it once, and Claude writes the README and the
 entry. A decision gets a file in `docs/decisions/`. An open item gets a line. The state file is
 rewritten at the end. This is what Claude usually does, not a guarantee: `amd check`
 shows what it missed.
 
-**Only when you ask.** `/amd:init` asks once, then writes and moves. `/amd:area` writes
-the README of one folder. `/amd:check` makes the fixes that you agree to. `/amd:end`
+**Only when you ask.** `/atlasmd:init` asks once, then writes and moves. `/atlasmd:area` writes
+the README of one folder. `/atlasmd:check` makes the fixes that you agree to. `/atlasmd:end`
 makes the fixes, rewrites the state file, commits and pushes. Every `amd` command in a
 terminal.
 
 **Never.** atlasmd deletes no file of yours. `amd init --undo` removes its own unchanged
 files, and `r` in `amd config` deletes only `atlasmd.toml`. It moves no file without your
-yes, and it commits nothing except `/amd:end` when you type it.
+yes, and it commits nothing except `/atlasmd:end` when you type it.
 
 ## In a session
 
@@ -226,7 +226,7 @@ then the subject in lower case with hyphens.
 
 The hook refuses a new Markdown file with a wrong name. `amd init` writes the rules for
 new files, plans, notes and decisions into `docs/start/40-way-of-work.md`, and `amd check`
-reports what breaks them. `/amd:end` makes the fixes at the end of a session.
+reports what breaks them. `/atlasmd:end` makes the fixes at the end of a session.
 
 ## atlasmd.toml
 
@@ -270,8 +270,8 @@ config` opens a screen with every repository, its settings and its files. `amd c
 | `amd statusline` | one line for the status line of Claude Code |
 | `amd set <key> <value>` | your two settings: `offer_setup`, `token_chars` |
 
-In a session, the skills `/amd:init`, `/amd:area`, `/amd:check`, `/amd:map`,
-`/amd:status`, `/amd:why` and `/amd:end` run these for you and explain the result.
+In a session, the skills `/atlasmd:init`, `/atlasmd:area`, `/atlasmd:check`, `/atlasmd:map`,
+`/atlasmd:status`, `/atlasmd:why` and `/atlasmd:end` run these for you and explain the result.
 
 ## The meter
 
@@ -307,7 +307,7 @@ It sends nothing anywhere. [PRIVACY.md](PRIVACY.md) has the full list.
 ## Uninstall
 
 ```
-claude plugin uninstall amd@atlasmd
+claude plugin uninstall atlasmd@atlasmd
 ```
 
 The files of atlasmd stay in `~/.claude/plugins/data/amd/` until you delete that folder.

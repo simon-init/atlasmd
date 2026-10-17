@@ -1,4 +1,4 @@
-"""amd scan: what /amd:init needs to know about a project before it proposes a setup.
+"""amd scan: what /atlasmd:init needs to know about a project before it proposes a setup.
 
 It lists every Markdown file with its size and its estimated tokens, the folders that
 hold source files and a README (the area candidates), whether atlasmd.toml and
@@ -204,7 +204,7 @@ def render(data):
                 lines.append(f"  {name}")
     lines.append("")
     lines.append(f"Folders with source files and a README  {len(data['candidates'])}. "
-                 "/amd:init can list each one as an [[area]] in atlasmd.toml")
+                 "/atlasmd:init can list each one as an [[area]] in atlasmd.toml")
     if data["candidates"]:
         width = max(len(c["path"]) for c in data["candidates"])
         lines.append("")
@@ -212,7 +212,7 @@ def render(data):
             lines.append(f"  {c['path']:<{width}}  {c['source_files']:>4} source file{'s' if c['source_files'] != 1 else ' '}  {c['heading']}".rstrip())
     lines.append("")
     lines.append(f"Folders with source files and no README  {len(data['without_readme'])}. "
-                 "/amd:init writes a README for each one and lists it as an [[area]]")
+                 "/atlasmd:init writes a README for each one and lists it as an [[area]]")
     if data["without_readme"]:
         width = max(len(c["path"]) for c in data["without_readme"])
         lines.append("")

@@ -49,7 +49,7 @@ All files are under `~/.claude/plugins/data/amd/`, or under the folder that
   in characters. It does not hold the summary.
 - `settings.toml`: your two settings, `offer_setup` and `token_chars`.
 - `seen.json`: the project folders where the hook already told Claude about
-  `/amd:init`.
+  `/atlasmd:init`.
 - `projects.toml`: the list of the repositories that atlasmd knows, with the path, the
   name of the folder, the group and the time of the last session start there.
 - `meter/`: one small file for each session in a repository with `atlasmd.toml`. It

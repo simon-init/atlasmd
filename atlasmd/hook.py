@@ -63,7 +63,7 @@ def _offer(cwd: str) -> str:
     if root is None or ledger.seen_root(root):
         return ""
     ledger.mark_seen(root)
-    return ("atlasmd: this project has no atlasmd.toml. Run /amd:init once. It writes atlasmd.toml and docs/start/, "
+    return ("atlasmd: this project has no atlasmd.toml. Run /atlasmd:init once. It writes atlasmd.toml and docs/start/, "
             "and lists which Markdown files Claude reads at the start and before a change in each folder.")
 
 

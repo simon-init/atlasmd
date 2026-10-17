@@ -60,13 +60,13 @@ ABOUT = ("Claude forgets everything between sessions and after a compaction, so 
          "and refuses a change to a file in a listed folder until Claude reads the files that atlasmd.toml names "
          "for that folder.")
 SKILLS = [
-    ("/amd:init", "write atlasmd.toml and docs/start/ after one question"),
-    ("/amd:check", "run amd check and make the fixes that you agree to"),
-    ("/amd:map", "run amd map and say what changed in the map file"),
-    ("/amd:area <folder>", "write the README.md and the [[area]] entry of a folder"),
-    ("/amd:status", "say which files under pack this session read"),
-    ("/amd:why", "explain the last edit that the hook refused"),
-    ("/amd:end", "run amd check, move the built plans, write start.state again, commit"),
+    ("/atlasmd:init", "write atlasmd.toml and docs/start/ after one question"),
+    ("/atlasmd:check", "run amd check and make the fixes that you agree to"),
+    ("/atlasmd:map", "run amd map and say what changed in the map file"),
+    ("/atlasmd:area <folder>", "write the README.md and the [[area]] entry of a folder"),
+    ("/atlasmd:status", "say which files under pack this session read"),
+    ("/atlasmd:why", "explain the last edit that the hook refused"),
+    ("/atlasmd:end", "run amd check, move the built plans, write start.state again, commit"),
 ]
 # What atlasmd does, in three sentences: the welcome of amd setup and the About station of amd config.
 WHAT = [
@@ -112,9 +112,9 @@ One line per open item, with the path of the file that holds its details. Remove
 """,
     "state": """# Where things stand
 
-Claude writes this file again at the end of every session, with /amd:end.
+Claude writes this file again at the end of every session, with /atlasmd:end.
 
-## Done since the last /amd:end
+## Done since the last /atlasmd:end
 
 ## What to look at
 
@@ -131,7 +131,7 @@ The rules that Claude follows in every session of this project. Keep only what e
 
 ## How the Markdown files live
 
-- A new folder with source files gets a README.md beside the code in the same commit. The README says what the folder holds, how to run it, and its state, with the date. The folder gets an [[area]] entry in atlasmd.toml with the README as the first file to read before a change there. Then run amd map. The command /amd:area <folder> does all three.
+- A new folder with source files gets a README.md beside the code in the same commit. The README says what the folder holds, how to run it, and its state, with the date. The folder gets an [[area]] entry in atlasmd.toml with the README as the first file to read before a change there. Then run amd map. The command /atlasmd:area <folder> does all three.
 - A decision is a new file in docs/decisions/ with the next number and a line in docs/decisions/README.md. A change to a decision goes into the decision's own file under a heading with the date. Never a second file for the same decision.
 - A plan is a file in docs/plans/ while the work is open, and one line in docs/start/20-open-items.md points at it. In the commit that builds the plan, the file moves to docs/archive/ with git mv, and the line leaves the open items.
 - An open item is one line in docs/start/20-open-items.md: the item, its state in one sentence, and the file that holds the detail. The line leaves in the commit that closes the item. A detail longer than three lines goes into a note in docs/notes/, and the line points at the note.
@@ -315,7 +315,8 @@ def cmd_help():
         out(f"  {label.ljust(width)}  {text}")
     out()
     out("  The skills in a Claude Code session:")
-    out("  " + "  ".join(name.split()[0] for name, _ in SKILLS))
+    for line in tui.textwrap.wrap("  ".join(name.split()[0] for name, _ in SKILLS), 76):
+        out("  " + line)
     return 0
 
 
@@ -1314,7 +1315,7 @@ def _tracked(root, rel_path):
 
 def remove_atlasmd(root):
     """Remove atlasmd from a repository: delete its atlasmd.toml, drop its row from the table of repositories, and
-    stop the offer of /amd:init there. Every other file stays. Returns the sentence for the person."""
+    stop the offer of /atlasmd:init there. Every other file stays. Returns the sentence for the person."""
     root = Path(root)
     toml_path = root / config.CONFIG_NAME
     had_toml = toml_path.is_file()

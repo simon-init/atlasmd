@@ -118,7 +118,7 @@ class Reading(Base):
 
     def test_a_second_call_reads_only_the_new_bytes(self):
         first = lines(assistant("m1", (10, 100, 50, 5)))
-        self.transcript.write_text(first, encoding="utf-8")
+        self.transcript.write_text(first, encoding="utf-8", newline="\n")
         record = meter.update(self.event(), on=True)
         self.assertEqual(record["offset"], len(first.encode()))
         # the old bytes change but keep their length: a reader from the start would count 999

@@ -1,5 +1,13 @@
 # Changes
 
+## 0.4.0
+
+2026-10-17. Simon: the plugin is named atlasmd, and amd is the command in the terminal.
+
+- The plugin's name is `atlasmd`, in `plugin.json` and in the marketplace. The install is `claude plugin install atlasmd@atlasmd`, and the skills are `/atlasmd:init`, `/atlasmd:area`, `/atlasmd:check`, `/atlasmd:map`, `/atlasmd:status`, `/atlasmd:why` and `/atlasmd:end`. The command in the terminal stays `amd`, and the files of the plugin stay in `~/.claude/plugins/data/amd/`. The marketplace maps the old name `amd` to `atlasmd`, so an install under the old name follows.
+- The tests pass on Windows. Four tests compared paths in the POSIX form with the paths of the platform, and one wrote a transcript with the line ends of the platform. The code did not change.
+- The workflow uses the actions that run on Node 24.
+
 ## 0.3.6
 
 2026-10-17. Simon: `/amd:init` must cover every code folder at once, not wait for an edit there.

@@ -373,7 +373,7 @@ def new_file(data: dict, path: str) -> tuple[str, str] | None:
         return None
     ledger.add_reminded(key, cfg.root / folder)
     return "remind", (f"atlasmd: {folder}/ has no [[area]] entry in atlasmd.toml. Make its README.md and add the "
-                      f"entry, or run /amd:area {folder}.")
+                      f"entry, or run /atlasmd:area {folder}.")
 
 
 def check(data: dict) -> tuple[str, str] | None:

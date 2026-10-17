@@ -103,8 +103,8 @@ class Growth(Case):
                         "app/tests/t.py", "data/notes.txt"):
             write(self.root, skipped, "x\n")
         self.assertEqual(self.found("no-readme"), [
-            ("lib/a/", "lib/a/ has source files and no README.md. Write one, or run /amd:area lib/a."),
-            ("tools/", "tools/ has source files and no README.md. Write one, or run /amd:area tools.")])
+            ("lib/a/", "lib/a/ has source files and no README.md. Write one, or run /atlasmd:area lib/a."),
+            ("tools/", "tools/ has source files and no README.md. Write one, or run /atlasmd:area tools.")])
         write(self.root, "tools/README.md", "# Tools\n")
         write(self.root, "lib/README.md", "# Lib\n")
         self.assertEqual(self.found("no-readme"), [])
@@ -118,7 +118,7 @@ class Growth(Case):
         write(self.root, "tests/t.py", "x\n")
         self.assertEqual(self.found("no-entry"), [
             ("tools/", "tools/ has source files and no [[area]] entry in atlasmd.toml lists it. "
-                       "Run /amd:area tools.")])
+                       "Run /atlasmd:area tools.")])
         self.settings('\n[[area]]\nname = "tools"\npaths = ["tools/"]\npack = ["tools/README.md"]\n')
         self.assertEqual(self.found("no-entry"), [])
 
@@ -232,7 +232,7 @@ class Cleaning(Case):
         self.commit("two", "2026-01-03T12:00:00")
         self.assertEqual(self.found("stale-state"), [
             ("docs/start/30-state.md", "docs/start/30-state.md did not change in the last 2 commits. "
-                                       "Rewrite it with /amd:end.")])
+                                       "Rewrite it with /atlasmd:end.")])
         write(self.root, "docs/start/30-state.md", "# Where things stand\n\nNew.\n")
         self.commit("the state", "2026-01-04T12:00:00")
         self.assertEqual(self.found("stale-state"), [])
@@ -293,7 +293,7 @@ class Keys(Case):
         self.assertIn(("stale-state", "docs/start/30-state.md"), found)
         code, out = self.amd("check")
         lines = out.splitlines()
-        self.assertIn("✗ growth      tools/ has source files and no README.md. Write one, or run /amd:area tools.", lines)
+        self.assertIn("✗ growth      tools/ has source files and no README.md. Write one, or run /atlasmd:area tools.", lines)
         self.assertTrue(any(line.startswith("✗ cleaning    docs/plans/billing.md is named by no line") for line in lines))
         self.assertNotIn("✓ growth      every path of every [[area]] entry exists", lines)
 
@@ -384,7 +384,7 @@ class Init(unittest.TestCase):
             self.assertIn("\n## How the Markdown files live\n\n", way)
             self.assertEqual(len([line for line in way.split("## How the Markdown files live")[1].splitlines()
                                   if line.startswith("- ")]), 8)
-            self.assertIn("The command /amd:area <folder> does all three.", way)
+            self.assertIn("The command /atlasmd:area <folder> does all three.", way)
             self.assertIn("Then rewrite the state file.", way)
             text = (root / "atlasmd.toml").read_text(encoding="utf-8")
             self.assertIn("\n[check]\n", text)

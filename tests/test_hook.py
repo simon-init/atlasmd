@@ -226,7 +226,7 @@ class Guard(HookCase):
 
     def test_a_bash_cat_of_a_pack_file_counts(self):
         self.bash_post("cat services/scrubber/README.md | head -5")
-        self.bash_post(f"cd {self.root}/docs && sed -n '1,20p' product-decisions.md")
+        self.bash_post(f"cd {pathlib.Path(self.root).as_posix()}/docs && sed -n '1,20p' product-decisions.md")
         self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
 
     def test_a_bash_sed_into_an_area_is_refused_and_echo_passes(self):
@@ -392,7 +392,7 @@ class NewFiles(HookCase):
 
     def test_a_new_source_file_in_a_folder_without_an_entry_is_named_once(self):
         tools = ("atlasmd: tools/ has no [[area]] entry in atlasmd.toml. Make its README.md and add the entry, "
-                 "or run /amd:area tools.")
+                 "or run /atlasmd:area tools.")
         answer = self.write_new("tools/new-file.py")
         self.assertFalse(self.denied(answer))
         self.assertEqual(self.context(answer), tools)
@@ -428,7 +428,7 @@ class NoConfig(HookCase):
     def test_the_offer_comes_once(self):
         text = self.context(self.hook({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(self.bare)}))
         self.assertEqual(text, "atlasmd: this project has no atlasmd.toml. "
-                               "Run /amd:init once. It writes atlasmd.toml and docs/start/, and lists which Markdown files Claude reads at the start and before a change in each folder.")
+                               "Run /atlasmd:init once. It writes atlasmd.toml and docs/start/, and lists which Markdown files Claude reads at the start and before a change in each folder.")
         self.assertIsNone(self.hook({"hook_event_name": "SessionStart", "source": "startup",
                                      "cwd": str(self.bare / "sub")}))
 
@@ -521,7 +521,7 @@ class BashForms(unittest.TestCase):
             "echo $HOME > $OUT": [],
         }
         for command, expected in cases.items():
-            self.assertEqual(self.writes(command), expected, command)
+            self.assertEqual(self.writes(command), [os.path.normpath(p) for p in expected], command)
         self.assertEqual(self.writes("echo 'an open quote"), [])
 
     def test_the_reads(self):
@@ -529,7 +529,8 @@ class BashForms(unittest.TestCase):
             write(pathlib.Path(folder) / "docs/a.md", "a")
             write(pathlib.Path(folder) / "docs/b.md", "b")
             reads = guard.bash_reads("cat docs/a.md && grep -n x docs/*.md missing.md", folder)
-            self.assertEqual(reads, [os.path.join(folder, "docs/a.md"), os.path.join(folder, "docs/b.md")])
+            self.assertEqual(reads, [os.path.normpath(os.path.join(folder, "docs/a.md")),
+                                     os.path.normpath(os.path.join(folder, "docs/b.md"))])
 
 
 class Ledger(unittest.TestCase):

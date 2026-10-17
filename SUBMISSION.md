@@ -20,14 +20,6 @@ of the README.
   words (it has), a LICENSE file (MIT), and `description`, `author` and `version` in
   `plugin.json` (it has).
 
-## One risk: the name
-
-The plugin's `name` is `amd`, and AMD is a well-known brand. The portal holds a name that
-matches a known brand for a reviewer. A hold is not a rejection, but it can take time. The
-`displayName` is `atlasmd`. If the reviewer refuses the name, the way out is to rename the
-plugin to `atlasmd` before anyone else installs it, because a published plugin must never
-change its name. The skills would then be `/atlasmd:init` and so on.
-
 ## The steps in the portal
 
 1. Open https://claude.ai/directory/manage and select **Submit new**, then **Plugin bundle**.
