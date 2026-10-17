@@ -336,9 +336,9 @@ class Remove(Base):
         before = self.files(api)
         code, text = self.amd("config", "--remove", str(api))
         self.assertEqual(code, 0, text)
-        self.assertIn("api left the list in", text)
+        self.assertIn("api left the table of repositories in", text)
         self.assertIn("atlasmd.toml, docs/start/ and every other file stay", text)
-        self.assertIn("amd init, amd config or the next session start there puts it back on the list", text)
+        self.assertIn("amd init, amd config or the next session start there puts it back into the table", text)
         self.assertEqual([e["name"] for e in projects.load()], ["web"])
         self.assertEqual(self.files(api), before)
         self.assertNotIn("../api/", self.start(web) or "")  # the group lost its files with the entry
@@ -350,7 +350,7 @@ class Remove(Base):
         projects.touch(web, "")
         code, text = self.amd("config", "--remove", "nothing")
         self.assertEqual(code, 2)
-        self.assertIn("nothing is not on the list in", text)
+        self.assertIn("nothing is not in the table of repositories in", text)
         code, text = self.amd("config", "--remove", "web")
         self.assertEqual(code, 0, text)
         self.assertEqual(projects.load(), [])
@@ -365,12 +365,12 @@ class Remove(Base):
         fake = FakeScreen(answer="n")
         fake.repositories.key(ord("r"))
         self.assertEqual([e["name"] for e in projects.load()], ["api", "web"])
-        self.assertTrue(any(s.startswith("Remove api from the list? No file in it changes.") for s in fake.said))
+        self.assertTrue(any(s.startswith("Remove api from the table of repositories? No file in it changes.") for s in fake.said))
         fake.answer = "y"
         fake.repositories.key(ord("r"))
         self.assertEqual([e["name"] for e in projects.load()], ["web"])
         self.assertEqual(fake.names(), ["web"])
-        self.assertIn("api left the list in", fake.repositories.note)
+        self.assertIn("api left the table of repositories in", fake.repositories.note)
         self.assertEqual(self.files(api), before)
 
 
@@ -390,7 +390,7 @@ class Words(Base):
         self.assertIn("as text when they fit in 10,000 characters", line.split("#", 1)[1])
         self.assertNotIn("inject", line.split("#", 1)[1])
         readme = (REPO / "README.md").read_text(encoding="utf-8")
-        self.assertIn("whether the start files go in as text, when they fit, or always as a list", readme)
+        self.assertIn("whether the start files go in as text, when they fit, or always as the names of the files", readme)
 
 
 class About(unittest.TestCase):

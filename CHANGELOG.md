@@ -1,5 +1,13 @@
 # Changes
 
+## 0.3.2
+
+2026-10-17. The README and the texts of the setup say what each thing is before they name it.
+
+- The README starts with why a project keeps what Claude must know in Markdown files, and what a compaction is. Every command comes after the sentences that say what it does, so that the reader can decide before the command. The install, the command `amd` in a terminal and the setup of a repository each give their three ways. The sentence on the limit of 10,000 characters says what Claude gets: the full text of the first files, then the names of the files that did not fit.
+- No text that a person reads says "the list" without its thing: the names of the files that did not fit, the record of the files that a session read in `~/.claude/plugins/data/amd/ledgers/`, the table of repositories in `projects.toml`, the tree of the Markdown files in the map file.
+- The welcome of `amd setup` gives the reason first, and says what a hook and a compaction are. The step "You" says what a token is. The About station of `amd config` starts with the reason.
+
 ## 0.3.1
 
 2026-10-17. Simon's corrections of the config, the setup and the words.

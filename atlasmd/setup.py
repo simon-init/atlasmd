@@ -20,8 +20,14 @@ STEPS = ["Welcome", "How it works", "The command amd", "You", "This repository",
 HELP = [("↑↓", "move"), ("enter", "pick"), ("←", "back"), ("q", "quit")]
 
 WELCOME = (
-    "atlasmd is a hook inside Claude Code. It runs at the start of a session, before every edit, "
-    "and after every compaction.\n\n"
+    "Claude starts every session with an empty memory. What it learned in the last session is gone: why a "
+    "decision was made, what is open, how you want the work done. The same happens after a compaction. So a "
+    "project writes what Claude must know into Markdown files in the repository, and the next session reads "
+    "them. These files grow, and a session that reads all of them at every start costs a lot. atlasmd decides "
+    "which of these files a session reads at the start, and which of them Claude must read before it changes "
+    "a file in a given folder.\n\n"
+    "atlasmd is a hook inside Claude Code: a small program that Claude Code runs at the start of a session, "
+    "before every edit, and after every compaction.\n\n"
     "## At the start of a session\n"
     f"{cli.WHAT[0]} Those files say what the repository is, what is open, and how to work here. So a new session "
     "knows the repository without reading all of it, and the start costs a few thousand tokens instead "
@@ -31,33 +37,40 @@ WELCOME = (
     "says that every time is stored as UTC. An agent that did not read it writes local time, and the bug is in "
     "the data for weeks.\n\n"
     "## After a compaction\n"
-    f"A compaction removes the files that Claude read from its context. {cli.WHAT[2]} So you can see what each "
+    "A compaction is what Claude Code does when a chat grows too long: it replaces the chat with a short "
+    f"summary. The files that Claude read are then gone from its memory. {cli.WHAT[2]} So you can see what each "
     "compaction costs.\n\n"
     f"This setup has {len(STEPS)} steps. You can change your settings later with amd config or amd set."
 )
 HOW = (
     "## At the start of a session\n"
     "- The hook reads the Markdown files in docs/start/, in name order, and hands them to Claude.\n"
-    "- A hook can hand over at most 10,000 characters.\n"
-    "- Shorter: Claude gets the text. Longer: Claude gets the list and reads each file, one Read each.\n"
+    "- Claude Code lets a hook hand over at most 10,000 characters at one time.\n"
+    "- When the files fit, Claude gets their full text. When they do not, Claude gets the full text of the "
+    "first files up to the limit, then the names of the files that did not fit, and reads each of those files "
+    "itself, one Read each.\n"
     "- After a compaction the same happens, so a compacted session starts like a fresh one.\n\n"
     "## Before an edit\n"
-    "- atlasmd.toml lists folders. For each folder it lists the files to read before a change there.\n"
-    "- Claude is about to change a file in a listed folder. The hook looks up which listed files "
+    "- atlasmd.toml, the settings file of atlasmd at the root of the repository, lists folders. For each folder "
+    "it names the files to read before a change there, for example the README of the folder.\n"
+    "- Claude is about to change a file in a listed folder. The hook looks up which of the named files "
     "Claude read in this session.\n"
     "- One is missing: the hook refuses the edit and names the files. Claude reads them and edits again.\n\n"
     "## After a compaction\n"
-    "- The hook keeps the list of files each session read, in ~/.claude/plugins/data/amd/ledgers/.\n"
-    "- A compaction empties that list, so the next edit in a listed folder reads the files again.\n"
+    "- The hook keeps a record of which files each session read, one small file per session, in "
+    "~/.claude/plugins/data/amd/ledgers/.\n"
+    "- A compaction empties that record, because the files left Claude's memory. So the next edit in a listed "
+    "folder reads the files again.\n"
     "- One line goes to compacts.log: date and time, repository folder, manual or automatic, and the "
     "size of the summary."
 )
 YOU = (
     "Two settings that apply to every repository on this computer.\n\n"
-    "1. A repository without atlasmd.toml. At the start of a session there, should Claude say once: "
-    "run /amd:init to set up atlasmd here? Yes or no.\n\n"
-    "2. Characters per token. atlasmd shows sizes in tokens, and it counts one token for every "
-    "2.5 characters. That fits English text and code. A larger number gives smaller sizes.\n\n"
+    "1. A repository without atlasmd.toml, that is, a repository where atlasmd is not set up yet. At the start "
+    "of a session there, should Claude say once: run /amd:init to set up atlasmd here? Yes or no.\n\n"
+    "2. Characters per token. A token is the unit in which the model counts text. atlasmd shows sizes in "
+    "tokens, and it counts one token for every 2.5 characters. That fits English text and code. A larger "
+    "number gives smaller sizes.\n\n"
     "If you set the option offer_setup in Claude Code with /plugin configure, that value wins over "
     "the first setting here."
 )
@@ -202,8 +215,8 @@ class Setup(tui.Page):
             "## Three commands to remember",
             "- /amd:init, in a Claude Code session, writes atlasmd.toml, fills docs/start/, and lists which files "
             "Claude reads before it changes a file in each folder.",
-            "- amd check, in a terminal, finds problems: docs/start/ over its token limit, listed files that do not "
-            "exist, and file names that break the rule of their folder.",
+            "- amd check, in a terminal, finds problems: docs/start/ over its token limit, files that atlasmd.toml "
+            "names but that do not exist, and file names that break the rule of their folder.",
             "- amd why, in a terminal, shows the last edit that the hook refused, and the files that Claude had not read.",
             "",
             "amd config shows every command, the skills and how to set up a repository on its first station, About. "
@@ -214,7 +227,8 @@ class Setup(tui.Page):
     def command_step(self):
         target = amd_path()
         why = ("In a Claude Code session, the skills of atlasmd run amd by the full path of the plugin, so Claude "
-               "needs nothing more. This step makes amd work in your own terminal too.")
+               "needs nothing more. Your own terminal finds a command only in the folders of your PATH. This step "
+               "makes amd work there too.")
         if os.name == "nt":
             text = (f"{why} The setup does not change PATH on Windows. Add this folder to your PATH once. "
                     f"The launcher in it is amd.cmd.\n\n    {target.parent}\n\n"
@@ -246,7 +260,8 @@ class Setup(tui.Page):
             return f"atlasmd.toml of this repository has a problem.\n\n{error}", [("Continue", "", "", self.next)]
         if cfg is None:
             text = (f"This folder has no atlasmd.toml: {short(root)}.\n\n"
-                    "amd init writes atlasmd.toml, four template files in docs/start/, and the empty folders "
+                    "amd init writes atlasmd.toml, the settings file of atlasmd, four files in docs/start/ with their "
+                    "headings and nothing under them, and the empty folders "
                     "docs/decisions/, docs/plans/, docs/notes/ and docs/archive/. It overwrites nothing. In a Claude "
                     "Code session, /amd:init does more: it reads the repository, fills the four files, and proposes "
                     "which files Claude reads before a change in each folder.")

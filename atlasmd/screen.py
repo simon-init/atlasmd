@@ -52,7 +52,7 @@ SENTENCE = 24  # a label longer than this is a sentence
 HELP = {
     0: [("↑↓", "scroll"), ("tab", "next station"), ("q", "quit")],
     1: [("↑↓", "move"), ("enter", "open"), ("g", "group"), ("m", "guard.mode"), ("i", "start files as text"),
-        ("b", "start.budget"), ("r", "remove from the list"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
+        ("b", "start.budget"), ("r", "remove from the table"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
     2: [("↑↓", "move"), ("←→", "change"), ("enter", "change or type"), ("tab", "next station"), ("s", "save"),
         ("q", "quit")],
     3: [("↑↓", "move"), ("p", "private or not"), ("tab", "next station"), ("s", "save"), ("q", "quit")],
@@ -183,7 +183,8 @@ def about_lines(width):
     heading("Set up a repository")
     para("amd init in the root of the repository, or /amd:init in a Claude Code session. amd init writes "
          "atlasmd.toml and the four files of docs/start/. /amd:init also fills them.", "1. ")
-    para("amd map writes the list of every Markdown file and of the [[area]] entries into the map file.", "2. ")
+    para("amd map writes the names of every Markdown file as a tree, and the table of the [[area]] entries, into "
+         "the map file.", "2. ")
     para("amd check reports what to fix.", "3. ")
     heading("The commands, as amd prints them")
     pairs([("amd " + name, text) for name, text in cli.COMMANDS])
@@ -196,10 +197,10 @@ def about_lines(width):
          "still gets the start files there. To stop them too, delete atlasmd.toml in that repository.", "· ")
     para("ATLASMD=off claude: one session without atlasmd. The hook gives no start files, refuses no edit and "
          "gives no reminder. The meter records the session, marked off.", "· ")
-    para(f"r on a row of Repositories, or amd config --remove <path>: the repository leaves the list in "
+    para(f"r on a row of Repositories, or amd config --remove <path>: the repository leaves the table of repositories in "
          f"{cli.tilde(projects.path())}, and the other repositories of its group stop getting its docs/start/. "
          "Nothing in the repository changes. amd init, amd config or the next session start there puts it back "
-         "on the list.", "· ")
+         "into the table.", "· ")
     return lines
 
 
@@ -328,7 +329,7 @@ class Repositories:
         """r: remove the repository from the list after one question. No file of the repository changes."""
         s = self.s
         lost = " Its changes that are not saved are lost." if repo.dirty() else ""
-        answer = s.ask_key(f"Remove {repo.name} from the list? No file in it changes.{lost}  y removes, another key "
+        answer = s.ask_key(f"Remove {repo.name} from the table of repositories? No file in it changes.{lost}  y removes, another key "
                            "stays", HELP[1])
         s.say("")
         if answer not in (ord("y"), ord("Y")):
@@ -336,7 +337,7 @@ class Repositories:
         try:
             projects.remove(repo.path)
         except OSError as exc:
-            s.say(f"{repo.name} stays on the list: {exc}", problem=True)
+            s.say(f"{repo.name} stays in the table: {exc}", problem=True)
             return
         s.drop(repo)
         self.note = cli.removed_text(repo.name, repo.path)

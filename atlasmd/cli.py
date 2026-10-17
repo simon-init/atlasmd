@@ -22,10 +22,10 @@ from atlasmd import __version__, areas, config, ledger, mapping, meter, naming, 
 COMMANDS = [
     ("setup", "set up atlasmd on a screen with six steps"),
     ("config", "show and change atlasmd.toml of each repository"),
-    ("scan", "list every Markdown file with its size in tokens"),
+    ("scan", "print every Markdown file with its size in tokens"),
     ("init", "write atlasmd.toml and docs/start/, overwrite nothing"),
     ("check", "find problems in docs/, atlasmd.toml and the folders"),
-    ("map", "list every Markdown file in docs/start/10-map.md"),
+    ("map", "write the tree of the Markdown files into 10-map.md"),
     ("area <folder>", "write the README.md and the [[area]] entry of a folder"),
     ("status", "show what this session read, and the last compaction"),
     ("why", "show the last edit that the hook refused, and why"),
@@ -48,13 +48,15 @@ OPTIONS = [
     ("config --set <path> <key> <value>", "write one key into atlasmd.toml there:"),
     ("", "group, guard.mode, start.inject or start.budget"),
     ("config --json", "the table as JSON, for a skill"),
-    ("config --remove <path>", "remove a repository from the list only"),
+    ("config --remove <path>", "remove a repository from that table only"),
     ("meter --list", "the same as the screen, as text"),
     ("meter --compare <id> <id>", "compare two sessions"),
     ("meter --json", "the records of this repository as JSON"),
 ]
-ABOUT = ("atlasmd tells Claude which Markdown files to read at the start of a session, and refuses a change "
-         "to a file in a listed folder until Claude has read the files listed for that folder.")
+ABOUT = ("Claude forgets everything between sessions and after a compaction, so a project keeps what Claude must "
+         "know in Markdown files. atlasmd tells Claude which of these files to read at the start of a session, "
+         "and refuses a change to a file in a listed folder until Claude reads the files that atlasmd.toml names "
+         "for that folder.")
 SKILLS = [
     ("/amd:init", "write atlasmd.toml and docs/start/ after one question"),
     ("/amd:check", "run amd check and make the fixes that you agree to"),
@@ -68,8 +70,8 @@ SKILLS = [
 WHAT = [
     "At the start of a session, and after every compaction, the hook gives Claude the Markdown files in "
     "docs/start/, not the whole repository.",
-    "Before an edit of a file in a folder that atlasmd.toml lists, the hook refuses the edit until Claude has "
-    "read the files listed for that folder.",
+    "Before an edit of a file in a folder that atlasmd.toml lists, the hook refuses the edit until Claude reads "
+    "the files that atlasmd.toml names for that folder.",
     "After every compaction, Claude reads those files again before its next edit there, and the hook writes the "
     "size of the summary to compacts.log.",
 ]
@@ -576,7 +578,7 @@ def run_check(cfg):
             cfg.start.dir)
     if composed.over_budget:
         add("budget", f"the files that Claude gets at the start have about {number(composed.tokens)} tokens, more than "
-                      f"the {number(cfg.start.budget)} in start.budget. So the hook gives Claude their list, not their text.")
+                      f"the {number(cfg.start.budget)} in start.budget. So the hook gives Claude their names, not their text.")
     for area in cfg.areas:
         pack = areas.pack_of(cfg, area)
         if not pack:
@@ -607,7 +609,7 @@ def run_check(cfg):
         add("map", f"{cfg.start.map}, the file in start.map, does not exist. Run amd init to make it.", cfg.start.map)
     else:
         for block in mapping.stale(cfg, files):
-            what = "table of the [[area]] entries" if block == "areas" else "list of the Markdown files"
+            what = "table of the [[area]] entries" if block == "areas" else "tree of the Markdown files"
             add("map", f"the {what} in {cfg.start.map} is out of date. Run amd map.", cfg.start.map)
     group = {"name": cfg.group, "repositories": composed.others}
     return {"root": str(root), "ok": not findings, "problems": len(findings), "budget": budget, "group": group,
@@ -666,16 +668,16 @@ def cmd_check(cwd, args):
                     f"Claude Code takes at most {number(b['char_limit'])} from a hook.")
                 g = b["given"]
                 if not b["inject"]:
-                    out("    start.inject is false, so the hook gives Claude the list of the files, "
+                    out("    start.inject is false, so the hook gives Claude the names of the files, "
                         "and Claude reads each file with one Read.")
                 elif g == n:
                     out("    So the hook gives Claude the text of every file.")
                 elif g:
                     first = f"first {g} files" if g != 1 else "first file"
-                    out(f"    So the hook gives Claude the text of the {first} and the list of the rest. "
-                        "Claude reads each file of the list with one Read.")
+                    out(f"    So the hook gives Claude the text of the {first} and the names of the rest. "
+                        "Claude reads each named file with one Read.")
                 else:
-                    out("    So the hook gives Claude the list of the files, and Claude reads each file with one Read.")
+                    out("    So the hook gives Claude the names of the files, and Claude reads each file with one Read.")
             for f in hits:
                 out(f"{mark(False)} {section.ljust(label_w)}  {f['text']}")
             others = result["group"]["repositories"]
@@ -804,10 +806,10 @@ def cmd_map(cwd, args):
     md = [f for f in scan.markdown_files(cfg.root, files)]
     where = rel(cfg.root, result["path"])
     if result["changed"]:
-        out(f"{mark(True)} wrote the list of {len(md)} Markdown files and the table of {len(cfg.areas)} [[area]] entries "
+        out(f"{mark(True)} wrote the tree of {len(md)} Markdown files and the table of {len(cfg.areas)} [[area]] entries "
             f"into {where}")
     else:
-        out(f"{mark(True)} {where} already has the list of {len(md)} Markdown files and the table of "
+        out(f"{mark(True)} {where} already has the tree of {len(md)} Markdown files and the table of "
             f"{len(cfg.areas)} [[area]] entries. Nothing changed.")
     for m in result["added"]:
         out(f"  The marker {m} was missing, so amd map added both markers and the text between them "
@@ -885,9 +887,9 @@ def cmd_status(cwd, args):
         except config.ConfigError as exc:
             raise Problem(str(exc))
     if key is None:
-        out("No session has read a file yet. The hook starts the list of read files at the first Read of a session.")
+        out("No session has read a file yet. The hook starts the record of read files at the first Read of a session.")
     elif data is None:
-        out(f"The hook has no list of read files for the session {opts.get('--session')}" +
+        out(f"The hook has no record of read files for the session {opts.get('--session')}" +
             (f" and the agent {opts.get('--agent')}." if opts.get("--agent") else "."))
     else:
         who = f"session {data.get('session_id')}" + (f", agent {data.get('agent_id')}" if data.get("agent_id") else "")
@@ -1208,8 +1210,8 @@ def find_repository(cwd, ident):
     for entry in projects.load():
         if entry["name"] == ident and (Path(entry["path"]) / config.CONFIG_NAME).is_file():
             return Path(entry["path"])
-    raise Problem(f"{ident} is not a folder with atlasmd.toml, and no repository of the list has this name. "
-                  "amd config --list shows the list.")
+    raise Problem(f"{ident} is not a folder with atlasmd.toml, and no repository of the table has this name. "
+                  "amd config --list shows the table.")
 
 
 def list_entry(cwd, ident):
@@ -1226,16 +1228,16 @@ def list_entry(cwd, ident):
     if len(named) == 1:
         return named[0]
     if named:
-        raise Problem(f"{len(named)} repositories of the list have the name {ident}. Give the path of the one to "
+        raise Problem(f"{len(named)} repositories of the table have the name {ident}. Give the path of the one to "
                       "remove. amd config --list shows the paths.")
-    raise Problem(f"{ident} is not on the list in {tilde(projects.path())}. amd config --list shows the list.")
+    raise Problem(f"{ident} is not in the table of repositories in {tilde(projects.path())}. amd config --list shows the table.")
 
 
 def removed_text(name, path):
     """The sentence after a removal from the list."""
-    return (f"{name} left the list in {tilde(projects.path())}. Nothing in {tilde(path)} changed: atlasmd.toml, "
+    return (f"{name} left the table of repositories in {tilde(projects.path())}. Nothing in {tilde(path)} changed: atlasmd.toml, "
             "docs/start/ and every other file stay. amd init, amd config or the next session start there puts it "
-            "back on the list.")
+            "back into the table.")
 
 
 def toggle_private(cfg, rel_path):
@@ -1277,7 +1279,7 @@ def cmd_config(cwd, args):
         return 0
     if args and args[0] == "--remove":
         if len(args) != 2:
-            raise Problem("amd config --remove takes one repository of the list, by its path or its name, for "
+            raise Problem("amd config --remove takes one repository of the table, by its path or its name, for "
                           "example: amd config --remove ~/old-api")
         entry = list_entry(cwd, args[1])
         projects.remove(entry["path"])
