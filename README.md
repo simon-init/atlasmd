@@ -8,6 +8,11 @@ A plugin for Claude Code. It tells Claude which Markdown files to read at the st
 session, and refuses a change in a folder until Claude read the files for that folder.
 Python, no other package, and a command line, `amd`.
 
+| Where | How you type a command | Example |
+|---|---|---|
+| In a Claude Code session | `/atlasmd:` and the name, or ask Claude in plain words | `/atlasmd:init`, or "set up atlasmd here" |
+| In a terminal | `amd` and the name | `amd check` |
+
 ## Why
 
 Claude starts every session with an empty memory. It knows the code that it reads, and

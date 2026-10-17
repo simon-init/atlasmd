@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.5
+
+2026-10-17.
+
+- The README says at the top how to type a command in a session and in a terminal.
+
 ## 0.4.4
 
 2026-10-17.
