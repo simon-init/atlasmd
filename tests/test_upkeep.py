@@ -358,7 +358,7 @@ class Area(Case):
         write(self.root, "web/app.js", "x\n")
         write(self.root, "app/deep/b.py", "x\n")
         before = (self.root / "atlasmd.toml").read_text(encoding="utf-8")
-        for args, words in ((["nothing"], "nothing/ does not exist."),
+        for args, words in ((["nothing"], "There is no folder nothing/ in"),
                             (["plain"], "plain/ holds no source files"),
                             (["app"], "app/ is in the paths of the [[area]] \"the app\" already"),
                             (["app/deep"], "app/deep/ is in the paths of the [[area]] \"the app\" already, as app/."),
