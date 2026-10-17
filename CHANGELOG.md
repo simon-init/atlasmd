@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.7
+
+2026-10-17.
+
+- The README states the size of a session start as a test result.
+
 ## 0.4.6
 
 2026-10-17.
