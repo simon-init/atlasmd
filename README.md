@@ -24,7 +24,7 @@ they grew to about 580,000 tokens, and every session read all of them at its sta
 atlasmd decides which files a session reads at the start, and which files Claude reads
 before a change in each folder.
 
-We tested atlasmd on that project. A new session started at about 85,000 tokens, grew
+atlasmd was tested on that project. A new session started at about 85,000 tokens, grew
 only as the work needed, and showed almost no loss in quality.
 
 ## What it does
