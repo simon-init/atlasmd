@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.4
+
+2026-10-17.
+
+- `plugin.json` names the logo and the privacy policy for the directory listing.
+
 ## 0.4.3
 
 2026-10-17.
