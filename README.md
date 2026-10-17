@@ -302,7 +302,9 @@ session, before an edit, after a read and after a compaction. It reads `atlasmd.
 the Markdown files that it names, the paths of the files that Claude reads and changes,
 and the transcript of the session for the token counts. It keeps the paths of read files,
 the counts and the dates under `~/.claude/plugins/data/amd/`, never the text of a message.
-It sends nothing anywhere. [PRIVACY.md](PRIVACY.md) has the full list.
+The hook and the `amd` command send nothing anywhere. One skill sends data: `/atlasmd:end`
+tells Claude to run `git push`, which sends your commits to the remote of your repository,
+as a push without the plugin does. [PRIVACY.md](PRIVACY.md) has the full list.
 
 The hook never approves a tool call. It refuses one with a reason, or it says nothing. The
 plugin reads these variables of the environment by name, and no other: `ATLASMD`,

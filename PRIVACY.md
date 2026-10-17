@@ -1,8 +1,8 @@
 # Privacy
 
 atlasmd is a set of hooks and a command line that run on your own computer, inside
-Claude Code. It has no server, no account and no network access. Nothing leaves the
-computer through the plugin.
+Claude Code. It has no server, no account and no network access. The one thing that
+leaves the computer is a `git push` that the skill `/atlasmd:end` tells Claude to run.
 
 ## What it reads
 
@@ -68,8 +68,13 @@ when it is missing. The link holds no data.
 
 ## What it sends
 
-Nothing. The plugin makes no network calls. It contacts no service, no telemetry
-endpoint and no update server.
+The hook and the `amd` command make no network calls. They contact no service, no
+telemetry endpoint and no update server.
+
+The skill `/atlasmd:end`, when you type it, tells Claude to commit the changed files and
+to run `git push`. The push sends those commits to the remote that your repository already
+has, the same place that a push without the plugin sends them. The skill skips the push
+when the rules of your project say that a push must wait. No other skill sends data.
 
 ## Changes
 

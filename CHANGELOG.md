@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.3
+
+2026-10-17.
+
+- The README and `PRIVACY.md` say that `/atlasmd:end` runs `git push` to the remote of the repository. They said before that nothing leaves the computer.
+
 ## 0.4.2
 
 2026-10-17.

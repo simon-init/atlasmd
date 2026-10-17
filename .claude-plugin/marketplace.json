@@ -9,7 +9,7 @@
       "name": "atlasmd",
       "source": "./",
       "description": "Gives Claude the Markdown files in docs/start/ at the start of a session and after a compaction, instead of the whole repository. Refuses a change to a file in a listed folder until Claude has read the files listed for that folder. Logs the date and the size of every compaction summary. Records the tokens of each session, so that amd meter compares sessions with atlasmd on and off.",
-      "version": "0.4.2"
+      "version": "0.4.3"
     }
   ],
   "renames": {
