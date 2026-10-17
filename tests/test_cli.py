@@ -42,8 +42,8 @@ def fixture(base):
     git(root, "config", "core.autocrlf", "false")
     write(root, "README.md", "# Fixture\n\nA project for the tests.\n")
     write(root, "CLAUDE.md", "# Rules\n\nRead `docs/old-notes.md` first.\n")
-    write(root, "services/scrub/README.md", "# The scrubber\n\nHow it works.\n")
-    write(root, "services/scrub/core/a.py", "x = 1\n")
+    write(root, "services/billing/README.md", "# The billing service\n\nHow it works.\n")
+    write(root, "services/billing/core/a.py", "x = 1\n")
     write(root, "web/README.md", "# The web app\n")
     write(root, "web/app.js", "console.log(1)\n")
     write(root, "docs/old-notes.md", "# Old notes\n")
@@ -133,7 +133,7 @@ class Init(Base):
             self.assertLessEqual(len(words), 10, key)
 
     def test_areas_json_lands_in_the_config(self):
-        areas = [{"name": "the scrubber", "paths": ["services/scrub/"], "pack": ["services/scrub/README.md"]},
+        areas = [{"name": "the billing service", "paths": ["services/billing/"], "pack": ["services/billing/README.md"]},
                  {"name": "the web app", "paths": ["web/"], "pack": ["web/README.md", "docs/product.md#P15"]}]
         code, text = self.amd("init", "--areas-json", self.areas_file(areas))
         self.assertEqual(code, 0, text)
@@ -177,9 +177,9 @@ class Init(Base):
 
 class Check(Base):
     def test_check_reports_each_problem_then_passes(self):
-        areas = [{"name": "the scrubber", "paths": ["services/scrub/"],
-                  "pack": ["services/scrub/README.md", "docs/decisions/P001-policy.md"]},
-                 {"name": "the core", "paths": ["services/scrub/core/"], "pack": []}]
+        areas = [{"name": "the billing service", "paths": ["services/billing/"],
+                  "pack": ["services/billing/README.md", "docs/decisions/P001-policy.md"]},
+                 {"name": "the core", "paths": ["services/billing/core/"], "pack": []}]
         self.amd("init", "--areas-json", self.areas_file(areas))
         write(self.root, "docs/notes/a-note.md", "# A note\n")
         self.amd("map")
@@ -208,7 +208,7 @@ class Check(Base):
         (self.root / "docs/notes/a-note.md").rename(self.root / f"docs/notes/{datetime.date.today()}-a-note.md")
         (self.root / "docs/old-notes.md").rename(self.root / "docs/archive/old-notes.md")
         text = (self.root / "atlasmd.toml").read_text(encoding="utf-8")
-        text = text.replace('name = "the core"\npaths = ["services/scrub/core/"]\npack = []',
+        text = text.replace('name = "the core"\npaths = ["services/billing/core/"]\npack = []',
                             'name = "the web app"\npaths = ["web/"]\npack = ["web/README.md"]')
         write(self.root, "atlasmd.toml", text)
         code, plain = self.amd("check")
@@ -272,15 +272,15 @@ class Scan(Base):
         self.assertEqual(code, 0)
         data = json.loads(text)
         files = {f["path"]: f for f in data["files"]}
-        self.assertEqual(set(files), {"README.md", "CLAUDE.md", "services/scrub/README.md", "web/README.md",
+        self.assertEqual(set(files), {"README.md", "CLAUDE.md", "services/billing/README.md", "web/README.md",
                                       "docs/old-notes.md"})
         self.assertGreater(files["README.md"]["tokens"], 0)
         self.assertIn("kb", files["README.md"])
         self.assertEqual(files["web/README.md"]["heading"], "The web app")
         self.assertEqual(data["total"]["files"], 5)
         candidates = {c["path"]: c for c in data["candidates"]}
-        self.assertEqual(set(candidates), {"services/scrub/", "web/"})
-        self.assertEqual(candidates["services/scrub/"]["heading"], "The scrubber")
+        self.assertEqual(set(candidates), {"services/billing/", "web/"})
+        self.assertEqual(candidates["services/billing/"]["heading"], "The billing service")
         self.assertFalse(data["config"])
         self.assertFalse(data["start_dir"])
         self.assertEqual(data["claude_md"]["names"], [{"name": "docs/old-notes.md", "exists": True}])
@@ -346,14 +346,14 @@ class Personal(Base):
 class Ledger(Base):
     def test_status_and_why_read_the_ledger(self):
         self.amd("init", "--areas-json", self.areas_file(
-            [{"name": "the scrubber", "paths": ["services/scrub/"],
-              "pack": ["services/scrub/README.md", "docs/old-notes.md"]}]))
+            [{"name": "the billing service", "paths": ["services/billing/"],
+              "pack": ["services/billing/README.md", "docs/old-notes.md"]}]))
         code, text = self.amd("why")
         self.assertEqual(code, 0)
         self.assertIn("No refused edit", text)
         key = ledger.key({"session_id": "s1"})
-        ledger.add(key, self.root / "services/scrub/README.md")
-        ledger.record_refusal(key, "atlasmd refused the edit of services/scrub/core/a.py.")
+        ledger.add(key, self.root / "services/billing/README.md")
+        ledger.record_refusal(key, "atlasmd refused the edit of services/billing/core/a.py.")
         ledger.log_compact(str(self.root), "auto", 4812)
         code, text = self.amd("status", "--session", "s1")
         self.assertEqual(code, 0, text)
@@ -362,7 +362,7 @@ class Ledger(Base):
         self.assertIn("auto", text)
         code, text = self.amd("why")
         self.assertEqual(code, 0)
-        self.assertIn("refused the edit of services/scrub/core/a.py", text)
+        self.assertIn("refused the edit of services/billing/core/a.py", text)
         self.assertIn("guard.mode", text)
 
 

@@ -2,7 +2,7 @@
 
 ## 0.4.0
 
-2026-10-17. Simon: the plugin is named atlasmd, and amd is the command in the terminal.
+2026-10-17. The plugin is named atlasmd, and amd is the command in the terminal.
 
 - The plugin's name is `atlasmd`, in `plugin.json` and in the marketplace. The install is `claude plugin install atlasmd@atlasmd`, and the skills are `/atlasmd:init`, `/atlasmd:area`, `/atlasmd:check`, `/atlasmd:map`, `/atlasmd:status`, `/atlasmd:why` and `/atlasmd:end`. The command in the terminal stays `amd`, and the files of the plugin stay in `~/.claude/plugins/data/amd/`. The marketplace maps the old name `amd` to `atlasmd`, so an install under the old name follows.
 - The tests pass on Windows. Four tests compared paths in the POSIX form with the paths of the platform, and one wrote a transcript with the line ends of the platform. The code did not change.
@@ -10,30 +10,29 @@
 
 ## 0.3.6
 
-2026-10-17. Simon: `/amd:init` must cover every code folder at once, not wait for an edit there.
+2026-10-17. `/amd:init` covers every code folder at once, instead of waiting for an edit there.
 
 - `/amd:init` proposes an `[[area]]` entry for every folder that holds code, with a README or without one, so that every source file is under the paths of an entry. After the yes, Claude writes the README of each code folder that has none, from its files. The reminder of the hook stays for a folder that comes later.
 - `amd scan` lists the code folders without a README, in the text and as `without_readme` in the JSON.
 
 ## 0.3.5
 
-2026-10-17. Simon: a removal from `amd config` must remove atlasmd from the repository, and the plugin needs a logo and the notes for the directory.
+2026-10-17. A removal from `amd config` removes atlasmd from the repository, and the plugin has a logo.
 
 - `r` on a repository in `amd config`, and `amd config --remove <path>`, remove atlasmd from that repository: they delete its `atlasmd.toml`, so the hook gives no start files and refuses nothing there, drop its row from the table of repositories, and stop the offer of `/amd:init` there. Every other file stays. The question before the deletion names the file. When git tracks the file, the message says that `git restore atlasmd.toml` brings it back. A repository whose `atlasmd.toml` is gone already leaves the table only.
 - The logo: a page with a route on it, in `assets/`, as SVG and PNG. The README shows it.
-- `SUBMISSION.md`: what must be true before a submission to Anthropic's directory, the steps in the portal, the answers to the data questions, and the risk of the name `amd`.
 - The README has the section "What it runs, reads and keeps".
 
 ## 0.3.4
 
-2026-10-17. Simon: a way back after `amd init` in the wrong folder, and who does what.
+2026-10-17. A way back after `amd init` in the wrong folder, and who does what.
 
 - `amd init --undo` removes what `amd init` made, the five files and the empty folders, while none of them changed. One changed file stops it, and the message names the file. `--dry-run` shows what it removes. The last line of `amd init` names the undo.
 - The README has the section "What happens by itself, and what you do": what the hook does at every session without a command, what Claude does in a session because the rules say so, what happens only when you ask, and what atlasmd never does. It says that nothing sorts the existing Markdown files by itself: `/amd:init` proposes the moves, also after `amd init`.
 
 ## 0.3.3
 
-2026-10-17. Simon: the README was far too long, and `amd area` on the repository itself gave a confusing message.
+2026-10-17. The README was far too long, and `amd area` on the repository itself gave a confusing message.
 
 - The README is a fifth of its size. The reason first, then what atlasmd does, the install, the three ways to set up a repository, each command with its output, and one table for the files, one for `atlasmd.toml` and one for the commands.
 - `amd area` on the root of the repository, or on a folder that does not exist, says that it takes a folder of the repository that holds code, for example `amd area api`. The README has a section "Add a code folder" with the output.
@@ -49,7 +48,7 @@
 
 ## 0.3.1
 
-2026-10-17. Simon's corrections of the config, the setup and the words.
+2026-10-17. Corrections of the config, the setup and the words.
 
 - The table of `amd config` shows the start files that a session in each repository gets, and their tokens: `4` for its own files, `4 from group` or `4 from also` when they come from the group or from `start.also`, and `2 + 3 from group` for both. A repository whose sessions get nothing shows `0`, and a sentence under the table says that a session there gets nothing at the start.
 - The table sorts by the name of the group, with the repositories without a group last, and by name inside a group. A new group on a row moves the row to its group at once.

@@ -13,13 +13,13 @@ from atlasmd.config import ConfigError  # noqa: E402
 
 AREAS = """
 [[area]]
-name = "the scrubber"
-paths = ["services/scrubber/", "services/scrubber/policy/", "tools/scrub.py"]
-pack = ["services/scrubber/README.md", "docs/product-decisions.md#P15", "./docs/policy.md"]
+name = "the billing service"
+paths = ["services/billing/", "services/billing/policy/", "tools/bill.py"]
+pack = ["services/billing/README.md", "docs/product-decisions.md#P15", "./docs/policy.md"]
 
 [[area]]
 name = "the policy"
-paths = ["services/scrubber/policy/strict/"]
+paths = ["services/billing/policy/strict/"]
 pack = ["docs/policy.md"]
 """
 
@@ -78,7 +78,7 @@ class Load(Case):
         self.assertEqual((cfg.guard.mode, cfg.guard.bash, cfg.agents.inject), ("remind", False, "none"))
         self.assertEqual(cfg.private, ["docs/start/90-me.md"])
         self.assertEqual(cfg.naming, {"docs/x": "^a$"})
-        self.assertEqual([a.name for a in cfg.areas], ["the scrubber", "the policy"])
+        self.assertEqual([a.name for a in cfg.areas], ["the billing service", "the policy"])
         self.assertEqual(cfg.areas[0].pack[2], "docs/policy.md")
 
     def test_bad_files_give_a_plain_sentence(self):
@@ -153,19 +153,19 @@ class Personal(unittest.TestCase):
 class Areas(Case):
     def test_the_longest_prefix_wins(self):
         cfg = self.settings(AREAS)
-        self.assertEqual(areas.area_of(cfg, self.root / "services/scrubber/x.py").name, "the scrubber")
-        self.assertEqual(areas.area_of(cfg, self.root / "services/scrubber/policy/a.py").name, "the scrubber")
-        self.assertEqual(areas.area_of(cfg, self.root / "services/scrubber/policy/strict/a.py").name, "the policy")
-        self.assertEqual(areas.area_of(cfg, self.root / "services/scrubber").name, "the scrubber")
-        self.assertEqual(areas.area_of(cfg, self.root / "tools/scrub.py").name, "the scrubber")
-        self.assertIsNone(areas.area_of(cfg, self.root / "tools/scrub.py.bak"))
-        self.assertIsNone(areas.area_of(cfg, self.root / "services/scrubber-old/x.py"))
+        self.assertEqual(areas.area_of(cfg, self.root / "services/billing/x.py").name, "the billing service")
+        self.assertEqual(areas.area_of(cfg, self.root / "services/billing/policy/a.py").name, "the billing service")
+        self.assertEqual(areas.area_of(cfg, self.root / "services/billing/policy/strict/a.py").name, "the policy")
+        self.assertEqual(areas.area_of(cfg, self.root / "services/billing").name, "the billing service")
+        self.assertEqual(areas.area_of(cfg, self.root / "tools/bill.py").name, "the billing service")
+        self.assertIsNone(areas.area_of(cfg, self.root / "tools/bill.py.bak"))
+        self.assertIsNone(areas.area_of(cfg, self.root / "services/billing-old/x.py"))
         self.assertIsNone(areas.area_of(cfg, self.root.parent / "elsewhere.py"))
 
     def test_the_pack_with_its_anchors(self):
         cfg = self.settings(AREAS)
         self.assertEqual(areas.pack_of(cfg, cfg.areas[0]), [
-            (self.root / "services/scrubber/README.md", None),
+            (self.root / "services/billing/README.md", None),
             (self.root / "docs/product-decisions.md", "P15"),
             (self.root / "docs/policy.md", None),
         ])
@@ -173,9 +173,9 @@ class Areas(Case):
     def test_free_paths(self):
         cfg = self.settings('[start]\nalso = ["../other/docs/start/"]\n' + AREAS)
         for free in ("atlasmd.toml", "docs/start/10-map.md", "docs/start/new.md", "docs/start/30-state.md",
-                     "services/scrubber/README.md", "docs/product-decisions.md", "../other/docs/start/10-map.md"):
+                     "services/billing/README.md", "docs/product-decisions.md", "../other/docs/start/10-map.md"):
             self.assertTrue(areas.is_free(cfg, self.root / free), free)
-        for guarded in ("services/scrubber/x.py", "docs/other.md", "docs/startle.md"):
+        for guarded in ("services/billing/x.py", "docs/other.md", "docs/startle.md"):
             self.assertFalse(areas.is_free(cfg, self.root / guarded), guarded)
 
     def test_rel(self):

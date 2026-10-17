@@ -39,7 +39,7 @@ class Naming(unittest.TestCase):
                          ["docs/plans/PHASE-5.md", "docs/plans/plan login.md"])
 
     def test_a_file_outside_every_rule_folder_is_not_examined(self):
-        self.assertEqual(bad(["README.md", "docs/PIFO-PROJECT.md", "docs/archive/Old Name.md",
+        self.assertEqual(bad(["README.md", "docs/MY-PROJECT.md", "docs/archive/Old Name.md",
                               "services/x/README.md"]), [])
 
     def test_the_rule_applies_below_its_folder_and_the_deeper_rule_wins(self):

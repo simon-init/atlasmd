@@ -27,9 +27,9 @@ bash = {bash}
 inject = "{agents}"
 
 [[area]]
-name = "the scrubber"
-paths = ["services/scrubber/scrubber/"]
-pack = ["services/scrubber/README.md", "docs/product-decisions.md#P15"]
+name = "the billing service"
+paths = ["services/billing/core/"]
+pack = ["services/billing/README.md", "docs/product-decisions.md#P15"]
 
 [[area]]
 name = "the review screen"
@@ -49,8 +49,8 @@ def build(root: pathlib.Path, budget=30000, inject="true", mode="deny", bash="tr
     write(root / "docs/start/20-open-items.md", "# Open items\n\nThe second file of the start reading.\n")
     write(root / "docs/start/10-map.md", "# Map\n\nThe first file of the start reading.\n")
     write(root / "docs/product-decisions.md", "# Decisions\n\n## P15\n\nThe default policy.\n")
-    write(root / "services/scrubber/README.md", "# The scrubber\n")
-    write(root / "services/scrubber/scrubber/main.py", "print('scrub')\n")
+    write(root / "services/billing/README.md", "# The billing service\n")
+    write(root / "services/billing/core/main.py", "print('bill')\n")
     write(root / "apps/review/README.md", "# The review screen\n")
     write(root / "apps/review/src/app.ts", "export {}\n")
     write(root / "tools/free.py", "print('free')\n")
@@ -119,7 +119,7 @@ class HookCase(unittest.TestCase):
         return self.hook({"hook_event_name": "PostCompact", "trigger": "auto", "compact_summary": summary})
 
     def read_pack(self, agent=None):
-        self.read("services/scrubber/README.md", agent=agent)
+        self.read("services/billing/README.md", agent=agent)
         self.read("docs/product-decisions.md", agent=agent)
 
     def denied(self, answer):
@@ -177,9 +177,9 @@ class StartReading(HookCase):
 
     def test_compact_source_empties_the_ledger_and_injects(self):
         self.read_pack()
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
         self.assertIn("## docs/start/10-map.md", self.context(self.start("compact")))
-        self.assertTrue(self.denied(self.edit("services/scrubber/scrubber/main.py")))
+        self.assertTrue(self.denied(self.edit("services/billing/core/main.py")))
 
     def test_subagent_gets_the_map(self):
         answer = self.subagent()
@@ -198,45 +198,45 @@ class StartReading(HookCase):
 
 class Guard(HookCase):
     def test_edit_in_an_area_is_refused_with_the_pack_named(self):
-        answer = self.edit("services/scrubber/scrubber/main.py")
+        answer = self.edit("services/billing/core/main.py")
         self.assertTrue(self.denied(answer))
         reason = answer["hookSpecificOutput"]["permissionDecisionReason"]
-        self.assertIn("atlasmd: this change to services/scrubber/scrubber/main.py is refused until you read the files that atlasmd.toml lists for \"the scrubber\":",
+        self.assertIn("atlasmd: this change to services/billing/core/main.py is refused until you read the files that atlasmd.toml lists for \"the billing service\":",
                       reason)
-        self.assertIn("- services/scrubber/README.md\n", reason)
+        self.assertIn("- services/billing/README.md\n", reason)
         self.assertIn("then make the change again", reason)
 
     def test_every_edit_tool_is_guarded(self):
         for tool in ("Write", "MultiEdit", "NotebookEdit"):
-            self.assertTrue(self.denied(self.edit("services/scrubber/scrubber/main.py", tool=tool)), tool)
+            self.assertTrue(self.denied(self.edit("services/billing/core/main.py", tool=tool)), tool)
 
     def test_edit_passes_after_a_read_of_every_pack_file(self):
-        self.read("services/scrubber/README.md")
-        answer = self.edit("services/scrubber/scrubber/main.py")
+        self.read("services/billing/README.md")
+        answer = self.edit("services/billing/core/main.py")
         self.assertTrue(self.denied(answer))
-        self.assertNotIn("- services/scrubber/README.md\n", answer["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertNotIn("- services/billing/README.md\n", answer["hookSpecificOutput"]["permissionDecisionReason"])
         self.read("docs/product-decisions.md")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
         self.assertTrue(self.denied(self.edit("apps/review/src/app.ts")))
 
     def test_a_read_with_an_offset_counts(self):
-        self.read("services/scrubber/README.md", offset=10, limit=5)
+        self.read("services/billing/README.md", offset=10, limit=5)
         self.read("docs/product-decisions.md", offset=3)
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
 
     def test_a_bash_cat_of_a_pack_file_counts(self):
-        self.bash_post("cat services/scrubber/README.md | head -5")
+        self.bash_post("cat services/billing/README.md | head -5")
         self.bash_post(f"cd {pathlib.Path(self.root).as_posix()}/docs && sed -n '1,20p' product-decisions.md")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
 
     def test_a_bash_sed_into_an_area_is_refused_and_echo_passes(self):
-        self.assertTrue(self.denied(self.bash_pre("sed -i 's/a/b/' services/scrubber/scrubber/main.py")))
+        self.assertTrue(self.denied(self.bash_pre("sed -i 's/a/b/' services/billing/core/main.py")))
         self.assertIsNone(self.bash_pre("echo hello"))
 
     def test_bash_false_leaves_bash_alone(self):
         build(self.root, bash="false")
-        self.assertIsNone(self.bash_pre("sed -i 's/a/b/' services/scrubber/scrubber/main.py"))
-        self.assertTrue(self.denied(self.edit("services/scrubber/scrubber/main.py")))
+        self.assertIsNone(self.bash_pre("sed -i 's/a/b/' services/billing/core/main.py"))
+        self.assertTrue(self.denied(self.edit("services/billing/core/main.py")))
 
     def test_a_path_in_no_area_passes(self):
         self.assertIsNone(self.edit("tools/free.py"))
@@ -247,23 +247,23 @@ class Guard(HookCase):
     def test_the_start_folder_the_packs_and_the_settings_pass(self):
         self.assertIsNone(self.edit("docs/start/30-state.md", tool="Write"))
         self.assertIsNone(self.edit("docs/start/10-map.md"))
-        self.assertIsNone(self.edit("services/scrubber/README.md"))
+        self.assertIsNone(self.edit("services/billing/README.md"))
         self.assertIsNone(self.edit("atlasmd.toml"))
 
     def test_a_subagent_has_its_own_ledger(self):
         self.read_pack()
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
-        self.assertTrue(self.denied(self.edit("services/scrubber/scrubber/main.py", agent="a1")))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
+        self.assertTrue(self.denied(self.edit("services/billing/core/main.py", agent="a1")))
         self.read_pack(agent="a1")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py", agent="a1"))
+        self.assertIsNone(self.edit("services/billing/core/main.py", agent="a1"))
 
     def test_post_compact_empties_the_ledgers_and_writes_the_log(self):
         self.read_pack()
         self.read_pack(agent="a1")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
         self.assertIsNone(self.compact("x" * 1234))
-        self.assertTrue(self.denied(self.edit("services/scrubber/scrubber/main.py")))
-        self.assertTrue(self.denied(self.edit("services/scrubber/scrubber/main.py", agent="a1")))
+        self.assertTrue(self.denied(self.edit("services/billing/core/main.py")))
+        self.assertTrue(self.denied(self.edit("services/billing/core/main.py", agent="a1")))
         lines = (self.data / "compacts.log").read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(lines), 1)
         stamp, cwd, trigger, chars = lines[0].split("\t")
@@ -278,29 +278,29 @@ class Guard(HookCase):
                                      "tool_input": {"file_path": str(self.root / "apps/review/src/app.ts")}}))
 
     def test_anchor_entries_count_on_any_read_and_are_named(self):
-        self.read("services/scrubber/README.md")
-        reason = self.edit("services/scrubber/scrubber/main.py")["hookSpecificOutput"]["permissionDecisionReason"]
+        self.read("services/billing/README.md")
+        reason = self.edit("services/billing/core/main.py")["hookSpecificOutput"]["permissionDecisionReason"]
         self.assertIn("- docs/product-decisions.md#P15, the section P15", reason)
         self.read("docs/product-decisions.md", offset=1, limit=2)
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
 
     def test_the_refusal_is_recorded(self):
-        self.edit("services/scrubber/scrubber/main.py", agent="a1")
+        self.edit("services/billing/core/main.py", agent="a1")
         with _data(self.data):
             text = ledger.last_refusal(ledger.key({"session_id": "s1", "agent_id": "a1"}))
         self.assertTrue(text.startswith("atlasmd: this change to "))
 
     def test_remind_mode_adds_context_and_does_not_refuse(self):
         build(self.root, mode="remind")
-        answer = self.edit("services/scrubber/scrubber/main.py")
+        answer = self.edit("services/billing/core/main.py")
         output = answer["hookSpecificOutput"]
         self.assertEqual(output["hookEventName"], "PreToolUse")
         self.assertNotIn("permissionDecision", output)
-        self.assertIn("services/scrubber/README.md", output["additionalContext"])
+        self.assertIn("services/billing/README.md", output["additionalContext"])
 
     def test_off_mode_does_nothing(self):
         build(self.root, mode="off")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
 
     def test_reads_at_the_same_time_are_all_kept(self):
         names = [f"docs/note-{n}.md" for n in range(8)]
@@ -324,8 +324,8 @@ class Guard(HookCase):
 
     def test_a_missing_pack_file_is_not_asked_for(self):
         (self.root / "docs/product-decisions.md").unlink()
-        self.read("services/scrubber/README.md")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.read("services/billing/README.md")
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
 
 
 class NewFiles(HookCase):
@@ -449,9 +449,9 @@ class NoConfig(HookCase):
 
     def test_a_broken_settings_file_never_breaks_a_tool_call(self):
         write(self.root / "atlasmd.toml", "[guard\nmode = 'deny'\n")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
-        self.assertIsNone(self.bash_pre("sed -i 's/a/b/' services/scrubber/scrubber/main.py"))
-        self.assertIsNone(self.read("services/scrubber/README.md"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
+        self.assertIsNone(self.bash_pre("sed -i 's/a/b/' services/billing/core/main.py"))
+        self.assertIsNone(self.read("services/billing/README.md"))
         self.assertIsNone(self.subagent())
         log = (self.data / "log.txt").read_text(encoding="utf-8")
         self.assertIn("ConfigError", log)
@@ -461,7 +461,7 @@ class NoConfig(HookCase):
 
     def test_a_wrong_value_never_breaks_a_tool_call(self):
         write(self.root / "atlasmd.toml", "[guard]\nmode = 'strict'\n")
-        self.assertIsNone(self.edit("services/scrubber/scrubber/main.py"))
+        self.assertIsNone(self.edit("services/billing/core/main.py"))
         self.assertIn("[guard] mode must be deny, remind or off", (self.data / "log.txt").read_text(encoding="utf-8"))
 
     def test_bad_input_is_ignored(self):
